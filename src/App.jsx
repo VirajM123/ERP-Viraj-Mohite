@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import Login from "./Login";
+import LandingPage from "./LandingPage";
 import { LogOut } from "lucide-react";
 import "./components/LogoutDialog.css";
 import ScreenLoading from "./components/ScreenLoading";
@@ -85,7 +86,7 @@ function App() {
           <Dashboard onLogout={() => setShowLogoutDialog(true)} />
         </Suspense>
       ) : (
-        <Login onLoginSuccess={handleLoginSuccess} />
+        <LandingPage onLoginSuccess={handleLoginSuccess} Login={Login} />
       )}
     </>
   );

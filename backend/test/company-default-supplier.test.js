@@ -37,7 +37,7 @@ for (const method of ['post', 'put']) {
   });
 }
 test('company selection applies the default while manual supplier changes and company series still work', () => {
-  let form = { company: '', supplier: 'manual', vouSer: 'OLD', vouNo: '10', isIgst: 'Y' };
+  let form = { company: '', supplier: 'manual', vouSer: '', vouNo: '', isIgst: 'Y' };
   const context = {
     companies: [{ code: 'C1', defaultSupplierId: supplierId }, { code: 'C2' }],
     otherAccounts: [{ _id: supplierId, accountGroup: 'SUNDRY CREDITORS', isActive: true }],
@@ -52,7 +52,10 @@ test('company selection applies the default while manual supplier changes and co
   context.change({ target: { name: 'company', value: 'C1' } });
   assert.equal(form.supplier, supplierId); assert.equal(form.vouSer, 'PUR'); assert.equal(form.vouNo, ''); assert.equal(form.isIgst, 'Y');
   context.change({ target: { name: 'supplier', value: 'manual' } }); assert.equal(form.supplier, 'manual');
-  context.change({ target: { name: 'company', value: 'C2' } }); assert.equal(form.supplier, 'manual');
+  form = { ...form, vouSer: 'OLD', vouNo: '10' };
+  context.purchaseFormData = form;
+  context.change({ target: { name: 'company', value: 'C2' } });
+  assert.equal(form.supplier, 'manual'); assert.equal(form.vouSer, 'OLD'); assert.equal(form.vouNo, '10');
 });
 test('a late account lookup applies the pending default only while the supplier is unchanged', () => {
   const start = dashboard.indexOf('  useEffect(() => {\n    const pending = pendingPurchaseDefaultSupplier.current;');

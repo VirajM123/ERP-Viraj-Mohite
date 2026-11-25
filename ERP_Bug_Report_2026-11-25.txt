@@ -1,0 +1,262 @@
+================================================================================
+TOTAL SOLUTION ERP - COMPREHENSIVE BUG & ROOT CAUSE REPORT
+Generated: 2026-11-25
+================================================================================
+
+This report documents all 23 bugs identified during testing, along with exact
+file paths, line numbers, symbol names, root causes, and recommended fixes.
+Section B also lists additional systemic bugs found during the full ERP audit.
+
+--------------------------------------------------------------------------------
+SECTION A: 23 REPORTED BUGS (VERIFIED ROOT CAUSES & FIXES)
+--------------------------------------------------------------------------------
+
+1) FIRMS MASTER: Edit, Update, and Delete Not Working
+   - Files:
+     * src/Dashboard.jsx (saveFirm: L16396-16458, fetch at L16414; editFirm: L16491-16515; deleteFirm: L16517-16556)
+     * backend/server.js (PUT /api/firms/:id: L27981-28027; DELETE /api/firms/:id: L28030-28049; GET /api/firms: L7209-7375)
+   - Root Cause:
+     1. saveFirm and deleteFirm use raw fetch(...) instead of secureFetch(...), bypassing CSRF/auth headers required by requireRoles("DISTRIBUTOR_ADMIN").
+     2. editFirm only sets setEditFirmId(firm._id) without fallback firm._id || firm.id.
+     3. PUT /api/firms/:id and DELETE /api/firms/:id filter by { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId }, whereas GET /api/firms returns all firms under distributorId. Updating or deleting any firm other than the currently active firmId fails with 404 "Firm not found".
+   - Fix:
+     * Switch saveFirm and deleteFirm to secureFetch.
+     * Use firm._id || firm.id in editFirm.
+     * In backend PUT/DELETE /api/firms/:id, scope by { _id: id, distributorId: req.auth.distributorId } (since DISTRIBUTOR_ADMIN manages all firms under their distributorId).
+
+2) GROUP MASTER: Description Not Coming While Updating
+   - Files:
+     * src/Dashboard.jsx (groupForm state: L13524; editGroup: L45775-45784; saveGroup: L48001-48069; input: L70831-70840)
+     * backend/server.js (groupSchema: L1198-1208; POST /api/groups: L5637-5665; PUT /api/groups/:id: L28053-28099)
+   - Root Cause:
+     1. editGroup only sets { code, name } in setGroupForm and omits description.
+     2. groupSchema, POST /api/groups, and PUT /api/groups/:id do not have or persist a description field at all.
+   - Fix:
+     * Add description: { type: String, default: "" } to groupSchema and save/update it in POST and PUT /api/groups.
+     * Include description in editGroup, groupForm initial state, and form resets.
+
+3) CATEGORY MASTER: Company List / Parent Category Not Loading Properly
+   - Files:
+     * src/Dashboard.jsx (lookupLoaders useEffect: L13152-13176; loadCategories: L17237-17268; loadCategoryMaster: L17467; editCategory: L45786-45798; saveCategory: L48077-48136; parentCategory select: L71202-71212)
+     * backend/server.js (categorySchema: L1210-1220; PUT /api/categories/:id: L28137-28183)
+   - Root Cause:
+     1. The Category Master <select name="parentCategory"> reads from categoriesState, which is only loaded when screen === "Product" (L13160), not when opening "Category Master" (which only calls loadCategoryMaster). So categoriesState is empty [].
+     2. editCategory and saveCategory do not populate or submit parentCategory, and categorySchema / PUT /api/categories/:id have no parentCategory field.
+   - Fix:
+     * Load categoriesState when opening Category Master (or populate from categoryMasterRows).
+     * Add parentCategory to categorySchema, POST/PUT /api/categories, editCategory, and saveCategory.
+
+4) ACCOUNT MASTER: Today's Date Not Coming Automatically as Opening Date
+   - File: src/Dashboard.jsx (accountForm: L13258-13308; Add New Account buttons: L72858-72870, L73007; openingDate input: L72407-72412)
+   - Root Cause:
+     * accountForm initial state and the "Add New Account" reset handlers omit openingDate, so value={accountForm.openingDate || ''} stays blank instead of defaulting to today's date (businessDateIST()).
+   - Fix:
+     * Default openingDate to businessDateIST() in accountForm initial state and in all Account Master "Add New" / reset handlers.
+
+5) OTHER ACCOUNT MASTER: Opening Date Also Has Problem
+   - File: src/Dashboard.jsx (otherAccountForm: L13480-13521; editOtherAccount: L45942-45986; Add New Account button: L73616-73627; openingDate input: L73219-73223)
+   - Root Cause:
+     1. otherAccountForm initial state and "Add New Account" reset omit openingDate.
+     2. editOtherAccount does not copy openingDate into setOtherAccountForm.
+     3. The input at L73221 has a hardcoded fallback value={otherAccountForm.openingDate || '2026-04-04'} instead of businessDateIST().
+   - Fix:
+     * Default openingDate to businessDateIST() in otherAccountForm and reset handlers, populate openingDate in editOtherAccount, and remove the hardcoded '2026-04-04' fallback.
+
+6) AREA MASTER: Description Not Coming While Updating
+   - Files:
+     * src/Dashboard.jsx (editArea: L45476-45492; saveArea: L45339-45475; description input: L74535-74543)
+     * backend/server.js (areaSchema: L1514-1526; PUT /api/areas/:id: L28902-28953)
+   - Root Cause:
+     1. editArea only sets { code, name } in setAreaForm and omits description.
+     2. saveArea only sends { areaCode, areaName, distributorId, firmId, firmName }, omitting description.
+     3. areaSchema and PUT /api/areas/:id have no description field.
+   - Fix:
+     * Add description to areaSchema, POST/PUT /api/areas, editArea, and saveArea.
+
+7) SALESMAN TO AREA MAPPING: Still Showing Pending After Saving
+   - Files:
+     * src/SalesmanToAreaMapping.jsx (handleGo: L54-127, fetch at L90; handleSave: L147-210, fetch at L175; status badge: L344-346)
+     * backend/server.js (GET/PUT /api/salesman-area-mappings: L10218-10255+)
+   - Root Cause:
+     1. handleGo and handleSave use raw fetch(...) instead of secureFetch(...) against protected routes (authorizeRequest("MAPPING", "SALESMAN_TO_AREA", ...)), causing auth/CSRF failure.
+     2. handleSave does not reload/re-sync mappings from the server after saving, and the status badge ("Active" vs "Pending") depends on row.salesmanCode being present in state.
+   - Fix:
+     * Replace raw fetch with secureFetch in SalesmanToAreaMapping.jsx and re-fetch/sync saved mappings after handleSave succeeds.
+
+8) AREA TO PARTY MAPPING: Clicking Directly Opens Dashboard Differently / UI Broken
+   - Files:
+     * src/Dashboard.jsx (lazy import: L58; handleSubMenuClick: L42636-43175; handlePlusClick: L43179-43241; Area To Party JSX: L81936-82140)
+     * src/SalesmanToAreaMapping.jsx (import "./Mapping.css": L17)
+   - Root Cause:
+     1. Mapping.css (which styles .mapping-page, .mapping-area-party-page, .mapping-toolbar, etc.) is ONLY imported inside SalesmanToAreaMapping.jsx (which is lazy-loaded). If you open Area To Party directly before visiting Salesman To Area, Mapping.css is not loaded and the entire UI renders unstyled.
+     2. handleSubMenuClick does not collapse/close the expanded nav menu for "Area To Party", and handlePlusClick does not call setShowDashboard(false).
+   - Fix:
+     * Import "./Mapping.css" directly in Dashboard.jsx (or App.jsx), and ensure handleSubMenuClick / handlePlusClick close the nav menu and set setShowDashboard(false).
+
+9) PURCHASE: Selecting Company Clears Manually Entered Series
+   - File: src/Dashboard.jsx (getConfiguredCompanySeries: L439-463; handlePurchaseInputChange: L27792-27819)
+   - Root Cause:
+     * In getConfiguredCompanySeries, if an "ALL" fallback row or a company row exists with an empty purchase series (""), it still returns { configured: true, value: "" }.
+     * In handlePurchaseInputChange when name === "company", it spreads ...(purchaseSeries.configured ? { vouSer: purchaseSeries.value, vouNo: "" } : {}), overwriting the user's entered Series with "" and clearing vouNo.
+   - Fix:
+     * Only treat a company series as configured when the resolved series string is non-empty, or preserve existing vouSer if configured value is empty.
+
+10) SALES BILL EDIT: Details Not Loading Completely
+    - File: src/Dashboard.jsx (handleEditVoucher: L59024-59609; invoiceFormData: L8344-8357; billing-area: L75881-75897; billing-party: L75985-76020)
+    - Root Cause:
+      1. handleEditVoucher uses raw fetch instead of secureFetch for /area-to-party-mappings and /salesman-area-mappings (L59124-59125).
+      2. Unlike handleSettleAdjustEdit, it does not fall back to bill.AreaName / bill.PartyName when AreaCode / PartyCode are missing, does not inject the bill's area/party into invoiceAreaPartyMappings if absent, and does not resolve salesmanName from salesmen via bill.SalesmanCode—causing dropdowns to appear blank.
+      3. setInvoiceFormData (L59140-59152) omits companyCode and lowercase billSeries.
+    - Fix:
+      * Use secureFetch, mirror handleSettleAdjustEdit's area/party/salesman fallback and mapping injection, and set companyCode and billSeries in setInvoiceFormData.
+
+11) BILLING: Closing Billing Window Opens White Screen Instead of List
+    - File: src/Dashboard.jsx (closeForm: L44306-44367; billing close button: L75705-75711)
+    - Root Cause:
+      * closeForm only sets setShowSalesList(true) when closingCounterSales is true (activeSubMenu === "Counter Sales"). When closing regular "Billing" (activeSubMenu === "Billing"), it sets setOpenFormFor(null) while showSalesList and showDashboard stay false, resulting in a blank white screen.
+    - Fix:
+      * In closeForm, when openFormFor === "Billing", set setShowSalesList(true) for both "Billing" and "Counter Sales".
+
+12) CREATE LOAD: Narration Field UI Issue & Area Dropdown Shows Code Instead of Name
+    - Files:
+      * src/Dashboard.jsx (createLoadAvailableAreas: L13382-13388; getSelectedCreateLoadAreaText: L13390-13408; Area dropdown: L67360-67484; Narration input: L67486-67498)
+      * src/Dashboard.css (.premium-load-narration textarea: L17731-17751)
+    - Root Cause:
+      1. Dashboard.css styles `.premium-load-information-grid .premium-load-narration textarea`, but Dashboard.jsx renders `<input className="erp-input" name="narration" />` instead of `<textarea>`.
+      2. createLoadAvailableAreas extracts raw item.area (code), and both getSelectedCreateLoadAreaText and the dropdown checkbox labels display raw area codes without resolving areaName from item.areaName or areas.
+    - Fix:
+      * Change the narration <input> to <textarea> (or match CSS selector), and map area codes to areaName in the Create Load area dropdown and summary text.
+
+13) SETTLE LOAD: Adjusting Bills Problems
+    - File: src/Dashboard.jsx (saveInvoice: L24178-24212; handleSettleAdjustEdit: L11208-11529; loadedBillProductReadOnly: L7881-7884; closeSettleAdjustInvoice: L7830-7841)
+    - Root Cause:
+      1. In saveInvoice, the allowEditBillAfterLoad !== true guard still runs even when isSettleAdjustMode === true, blocking updates with "This invoice is already assigned to a load. Editing loaded bills is disabled in General Setup."
+      2. handleSettleAdjustEdit (L11219) uses raw fetch instead of secureFetch, does not set editingLoadedSalesBill or originalLoadedInvoiceItems, and maps only minimal item fields (L11311-11326) without batchNo, units, mrp, purchaseRate, tax/discount fields, or recalculating summary/cash discount.
+    - Fix:
+      * Allow saving in saveInvoice when isSettleAdjustMode === true (or bypass the general-setup lock for Settle Load adjustment), use secureFetch, and map full item fields + recalculate totals in handleSettleAdjustEdit.
+
+14) UPDATING BILLS: Small Stock Window Shows Creation-Time Stock Instead of Latest Stock
+    - File: src/Dashboard.jsx (getSalesDetailStock: L8726-8732; rendered at L77402-77407)
+    - Root Cause:
+      * getSalesDetailStock(item) reads item?.selectedBatch?.stockQty ?? item?.selectedBatch?.qty ?? 0 from the snapshot saved inside the bill's items array when the bill was originally created, rather than fetching/looking up current live batch stock.
+    - Fix:
+      * Look up current stock from live batch/product state (via /api/stock/batches or live batch map) when editing/viewing items, falling back to selectedBatch only if live lookup is unavailable.
+
+15) RECEIPT: Customer Banks Not Showing
+    - Files:
+      * src/Dashboard.jsx (lookupLoaders: L13152-13176, L13168; <Transaction customerBanks={customerBanks} />: L71545)
+      * src/Transaction.jsx (filteredCustomerBanks: L9947-9955; Drawer Bank dropdown: L10930-11002)
+    - Root Cause:
+      * In Dashboard.jsx (L13168), loadCustomerBanks is only triggered when screen === "Customer Bank Master", never when "Transactions" / "Receipt" is opened. Thus customerBanks remains [] in Receipt.
+    - Fix:
+      * Trigger loadCustomerBanks when opening Transactions/Receipt (or in Transaction.jsx on mount).
+
+16) RECEIPT: Edit Not Working; Saving Without Payment Type; Auto-Adjust Not Working
+    - Files:
+      * src/Transaction.jsx (handleReceiptInput: L3050-3090; distributeReceiptAmountToBills: L2876-2901; saveReceipt: L3485-3623; editReceipt: L3857-4129; Receipt Amount input: L10893-10902)
+      * backend/transaction.js (POST /receipt: L1067-1284; PUT /receipt/:id: L1992-2025)
+    - Root Cause:
+      1. Edit Not Working: POST /receipt creates all receipts with status: "POSTED" (L1256), and PUT /receipt/:id rejects any status === "POSTED" receipt with 409 Conflict (L2023-2025). Also editReceipt only loads receipt.receiptBills without merging other pending bills for the party.
+      2. Saving Without Payment Type: Neither saveReceipt (frontend) nor POST /receipt (backend) validates that bankCash is selected, or that chequeNo is entered when a Bank (non-Cash) account is selected.
+      3. Auto-Adjust Not Working: distributeReceiptAmountToBills is only called inside loadReceiptBillBySeriesNo (L2996), NOT when receiptAmount changes in handleReceiptInput.
+    - Fix:
+      * Enforce bankCash (and chequeNo when Bank/Cheque mode) in saveReceipt and POST /receipt.
+      * Call distributeReceiptAmountToBills when receiptAmount changes (or via an "Auto Adjust" trigger) in handleReceiptInput.
+      * Either support safe receipt reversal+repost on edit or remove/disable Edit for posted receipts with clear UX.
+
+17) RECEIPT: Extra Amount Not Saving for Party & Received Amount Workflow
+    - Files:
+      * src/Transaction.jsx (saveReceipt: L3496-3598; Unadjusted Balance UI: L11265-11273)
+      * backend/transaction.js (receiptSchema: L72-125; POST /receipt: L1093-1101, L1248-1270)
+    - Root Cause:
+      * Although the UI displays "Unadjusted Balance", saveReceipt blocks saving when adjustedReceiptBills.length === 0, and POST /receipt requires bills.length > 0 and Math.abs(receiptAmount - cashAllocated) <= 0.01 (returning 400 "Receipt amount must equal the current cash allocations."). There is no unadjustedAmount / on-account advance field in receiptSchema or party-advance ledger logic.
+    - Fix:
+      * Add unadjustedAmount (on-account / advance) support in receiptSchema, allow receiptAmount >= cashAllocated in saveReceipt and POST /receipt, and credit the full receiptAmount to the party's ledger while only allocating cashAllocated to specific bills.
+
+18) CHEQUE BOUNCE: Cheque No Loads While Typing Instead of on Enter
+    - File: src/Transaction.jsx (handleChequeBounceInput: L4842-4864, L4854-4856; chequeNo input: L14705-14712)
+    - Root Cause:
+      * handleChequeBounceInput immediately calls loadChequeBounceReceiptDetails(...) on every onChange keystroke when name === "chequeNo", and the <input name="chequeNo"> has no onKeyDown Enter handler.
+    - Fix:
+      * Remove the immediate lookup from onChange for chequeNo and trigger loadChequeBounceReceiptDetails in onKeyDown when e.key === "Enter" (or onBlur).
+
+19) CREDIT NOTE: Product Window Not Opening Properly at 100% Zoom; Selecting Series/No Then Company Clears Them
+    - File & CSS:
+      * src/Dashboard.jsx (openCreditProductDropdown: L33855-33910; reposition effect: L9496-9532; company change handler: L33092-33110; portal: L83238-83253)
+      * src/Dashboard.css (body > .credit-product-dropdown: L34160-34173, L33775-33778)
+    - Root Cause:
+      1. Product Window at 100% Zoom: openCreditProductDropdown and reposition hardcode dropdownHeight = 340 and flip the portal dropdown above the input when rect.bottom + 4 + 340 > window.innerHeight - 10 (which triggers at 100% zoom because the product grid is in the lower half of the viewport), while CSS limits max-height to 280px.
+      2. Series/No Cleared on Company Select: On company change (L33092-33110), getConfiguredCompanySeries(companyCode, "creditNote") overwrites creditNoteSeries and clears creditNoteNo: "".
+    - Fix:
+      * Measure actual available viewport space below/above and set maxHeight dynamically instead of hardcoding 340px flip, and only auto-set creditNoteSeries/creditNoteNo if the user hasn't already entered them (or if a non-empty configured series exists).
+
+20) DEBIT NOTE: Same Product Window UI Problem + After Saving Not Clearing Previous Product Bar Records
+    - File & CSS:
+      * src/Dashboard.jsx (openDebitProductDropdown: L32187-32245; reposition: L9496-9532; addDebitNoteItem: L37055-37085; saveDebitNote: L38733, L38869; handlePlusClick("Debit Note"): L43586-43602; portal: L81726-81740)
+      * src/Dashboard.css (body > .billing-product-dropdown: L32165-32173)
+    - Root Cause:
+      1. Same 340px hardcoded flip-above dropdown calculation as Credit Note (while CSS sets max-height: 260px).
+      2. Stale Closure on Save: addDebitNoteItem uses setDebitNoteItems([...debitNoteItems, newItem]) with deps [debitNoteItems.length]. After saveDebitNote clears items and calls handlePlusClick("Debit Note"), handlePlusClick runs setTimeout(() => addDebitNoteItem(), 50), which executes the pre-save closure and restores all old debitNoteItems plus a blank row.
+    - Fix:
+      * Use functional state update setDebitNoteItems((prev) => [...prev, newItem]) in addDebitNoteItem, and fix the dropdown positioning logic.
+
+21) CREDIT NOTE & DEBIT NOTE: Searching Without Selecting Company Loads All Companies' Products
+    - File: src/Dashboard.jsx (buildFilteredCreditProductList: L23487-23505; buildFilteredDebitProductList: L32078-32087)
+    - Root Cause:
+      * buildFilteredCreditProductList sets isAllCompany = true when selectedCompanyValues.length === 0, and buildFilteredDebitProductList returns true in matchesCompany when !selectedCompanyCode && !selectedCompanyName.
+    - Fix:
+      * Require a selected company before returning products (return [] or show "Select a company first" when no company is selected).
+
+22) DEBIT NOTE LIST & CREDIT NOTE LIST: Date Not Showing & Only Company Code Showing
+    - Files:
+      * src/Dashboard.jsx (loadDebitNotes: L30117-30280; loadCreditNotes: L29602-29729; handleDebitNoteInputChange: L37032-37050; saveDebitNote: L38377-38385; getSourceValue: L52948-52985; renderVoucherList: L55755-55958)
+      * backend/server.js (GET /api/debit-note/list: L24141-24720; GET /api/credit-note/list: L27357-27900)
+    - Root Cause:
+      1. Date Not Showing: loadDebitNotes and loadCreditNotes set billDate: VDate without setting date, and attach originalItem (raw DB doc with VDate). renderVoucherList looks for item.date || getSourceValue(item, ["BillDate", "billDate", "TrnDate", "trnDate"]), ignoring VDate, so date renders blank/"-". (Similarly, billSeries/billNo check BillSeries/BillNo before DebitNoteSeries/DebitNoteNo or CreditNoteSeries/CreditNoteNo.)
+      2. Only Company Code Showing: handleDebitNoteInputChange (name === "company") only sets company (the code) without setting companyName. saveDebitNote then saves CompanyName: debitNoteFormData.companyName || debitNoteFormData.company, storing the code in CompanyName.
+      3. Backend: Non-paginated fallback of GET /api/credit-note/list (L27380) sorts by { vDate: -1, billNo: -1 } instead of { VDate: -1, CreditNoteNo: -1 }.
+    - Fix:
+      * Include "VDate", "vDate", "DebitNoteSeries", "DebitNoteNo", "CreditNoteSeries", "CreditNoteNo" in renderVoucherList / loadDebitNotes / loadCreditNotes.
+      * Resolve and store companyName properly in handleDebitNoteInputChange when selecting a company.
+
+23) EDIT PURCHASE: Not Loading Purchase Product-Related Data
+    - Files:
+      * backend/server.js (GET /api/purchase/list: L11877-11882; PUT /api/purchase/:id: L11325; DELETE /api/purchase/:id: L29909)
+      * src/Dashboard.jsx (handleEditVoucher for Purchase: L59616-59665)
+    - Root Cause:
+      1. GET /api/purchase/list explicitly excludes line items using .select({ items: 0, historicalSnapshot: 0, desktopImportStockKeys: 0 }).
+      2. There is NO GET /api/purchase/:id endpoint in backend/server.js.
+      3. handleEditVoucher uses the list row directly without fetching the full purchase document, so item.items is undefined and setPurchaseItems receives [].
+    - Fix:
+      * Add GET /api/purchase/:id in backend/server.js returning the full PurchaseHeader document (with items).
+      * Update handleEditVoucher (type === "Purchase") in Dashboard.jsx to fetch GET /api/purchase/:id via secureFetch before populating purchaseItems.
+
+
+--------------------------------------------------------------------------------
+SECTION B: ADDITIONAL ISSUES FOUND IN FULL ERP AUDIT
+--------------------------------------------------------------------------------
+
+1. PDC Docket Delete Does Nothing (backend/transaction.js:L282-344, L3913):
+   pdcDocketSchema lacks a `status` field, so `{ $set: { status: "REVERSED" } }` is stripped by Mongoose.
+2. Soft-Deleted ("REVERSED") Records Still Appear in /list Endpoints (backend/transaction.js):
+   /receipt/list, /cheque-bounce/list, /pdc-docket/list, /contra/list, /collection-voucher/list do not filter `status: { $ne: "REVERSED" }`.
+3. View Cheque Bounce Opens Editable (src/Transaction.jsx:L14262-14266):
+   editChequeBounce calls openTransactionEntry which resets isFormReadOnly to false.
+4. Master -> "Scheme" Menu Item Is Unimplemented (src/Dashboard.jsx:L13556):
+   Listed in menuItems.master.items, but renders a blank screen.
+5. ImportData.jsx DesktopJournalVoucher 404 (src/ImportData.jsx:L20):
+   Endpoint "/api/p0/journal-voucher" + API_URL produces "/api/api/p0/journal-voucher".
+6. SecuritySetup.jsx `view` Permission Toggle Blocked (src/SecuritySetup.jsx:L1258, L1384):
+   `if (permissionName === "view") return;` silently blocks toggling view permissions.
+7. Company Wise Purchase Report Queries Legacy Empty Collection (backend/server.js:L34138-34313):
+   Queries `PurchaseBill` (purchasebills) instead of `PurchaseHeader` (T_Pur_Header) and ignores UI flags.
+8. Purchase Analysis & Permission Audit Report Filters Ignored:
+   /api/reports/purchase-analysis ignores reportLevel, reportWith, discountDetails; /api/p0/reports/permission-audit reads user/module instead of permissionUser/permissionModule.
+9. Dead / Unwired Buttons Across Modules:
+   * ServiceManagement.jsx: Preview, More actions, literal "?" pagination buttons.
+   * SalesmanToAreaMapping.jsx: Export Excel/PDF, Print List, row View button.
+   * Login.jsx: Remember Me checkbox, Forgot Password button.
+   * Dashboard.jsx: Print/Preview for Purchase/Credit Note/Debit Note/Load; Barcode/Fast Add/Excel Import in Billing/Quotation; Header Notifications/Theme toggle; Catalog Report toolbar buttons.
+10. Receipt Bank Name vs accountCode Split (src/Transaction.jsx & backend/transaction.js):
+   Receipt posts `bankCash` (Bank Name) instead of bank `accountCode` into Acc_Journal, which can split bank ledger balances from Opening Balance / Chart of Accounts Setup.
+================================================================================

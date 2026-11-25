@@ -176,8 +176,8 @@ const { state, dispatch } = useERP();
   const [receiptBillsStatus, setReceiptBillsStatus] = useState("loading");
   // const [salesmanBills, setSalesmanBills] = useState([]);
   //  const [areaBills, setAreaBills] = useState([]);
-  const openTransactionEntry = (menu) => {
-    setIsFormReadOnly(false);
+  const openTransactionEntry = (menu, { readOnly = false } = {}) => {
+    setIsFormReadOnly(readOnly);
     setActiveTransaction(menu);
 
     if (menu === "Contra") {
@@ -3053,6 +3053,25 @@ if (menu === "PDC Docket") {
       value
     } = event.target;
 
+    if (name === "receiptAmount") {
+      const partyName = String(receiptFormData.partyName || "").trim();
+      const sourceBills = receiptItems.length
+        ? receiptItems.map((item) => ({
+            ...item,
+            billSeries: item.trnSeries || item.billSeries || "",
+            billNo: item.trnNo || item.billNo || "",
+            trnDate: item.trnDate || item.billDate || "",
+            adjusted: Number(item.adjustAmt || 0),
+            balance: Math.max(Number(item.amount || 0) - Number(item.adjustAmt || 0), 0),
+          }))
+        : pendingBills.filter((bill) =>
+            !partyName || clean(bill.party) === clean(partyName)
+          );
+      const adjustedItems = distributeReceiptAmountToBills(sourceBills, value);
+      setReceiptItems(adjustedItems);
+      calculateReceiptSummary(adjustedItems);
+    }
+
     setReceiptFormData((previous) => {
       const updatedData = {
         ...previous,
@@ -3573,18 +3592,6 @@ const selectParty = (
             };
           });
 
-      if (
-        adjustedReceiptBills.length === 0
-      ) {
-        alert(
-          "Please adjust an amount against at least one bill."
-        );
-        return;
-      }
-
-      const firstAdjustedBill =
-        adjustedReceiptBills[0];
-
       const receiptAmount =
         Number(
           receiptFormData.receiptAmount
@@ -3596,6 +3603,31 @@ const selectParty = (
         );
         return;
       }
+
+      const paymentAccount = String(receiptFormData.bankCash || "").trim();
+      const isCashReceipt = /^cash$/i.test(paymentAccount);
+      if (!paymentAccount) {
+        alert("Please select Cash or a Bank account before saving the receipt.");
+        return;
+      }
+      if (!isCashReceipt && !String(receiptFormData.chequeNo || "").trim()) {
+        alert("Cheque number is required for a bank receipt.");
+        return;
+      }
+      if (!String(receiptFormData.partyId || receiptFormData.partyName || "").trim()) {
+        alert("Please select the party receiving this amount.");
+        return;
+      }
+      const allocatedAmount = adjustedReceiptBills.reduce(
+        (total, bill) => total + Number(bill.nowAdjust || 0),
+        0
+      );
+      if (allocatedAmount > receiptAmount + 0.01) {
+        alert("Adjusted amount cannot be greater than the received amount.");
+        return;
+      }
+      const unadjustedAmount = Number(Math.max(receiptAmount - allocatedAmount, 0).toFixed(2));
+      const firstAdjustedBill = adjustedReceiptBills[0] || {};
 
       const distributorId =
         receiptFormData.distributorId ||
@@ -3660,6 +3692,7 @@ const selectParty = (
           "",
 
         receiptAmount,
+        unadjustedAmount,
 
         receiptBills:
           adjustedReceiptBills,
@@ -4851,10 +4884,6 @@ const handleSeriesChange =
       updatedData = loadChequeBounceReceiptDetails(value, updatedData.chequeNo, updatedData);
     }
 
-    if (name === "chequeNo") {
-      updatedData = loadChequeBounceReceiptDetails(updatedData.partyName, value, updatedData);
-    }
-
     updatedData.totalAmt = calculateChequeBounceTotal(
       updatedData.chequeAmt,
       updatedData.chqBounceCharges
@@ -5210,7 +5239,7 @@ const saveChequeBounce =
   );
 }
   };
-  const editChequeBounce = (chequeBounce) => {
+  const editChequeBounce = (chequeBounce, { readOnly = false } = {}) => {
     const series = String(
       chequeBounce.trnSeries || ""
     )
@@ -5299,7 +5328,8 @@ const saveChequeBounce =
     }
 
     openTransactionEntry(
-      "Cheque Bounce"
+      "Cheque Bounce",
+      { readOnly }
     );
   };
 
@@ -14260,9 +14290,9 @@ setTransactionFormMode((prev) => ({
                                 className="cheque-bounce-action-button view"
                                 title="View Cheque Bounce"
                                 onClick={() => {
-                                  setIsFormReadOnly(true);
                                   editChequeBounce(
-                                    chequeBounce
+                                    chequeBounce,
+                                    { readOnly: true }
                                   );
                                 }}
                               >
@@ -14707,6 +14737,23 @@ setTransactionFormMode((prev) => ({
                 name="chequeNo"
                 value={chequeBounceFormData.chequeNo || ""}
                 onChange={handleChequeBounceInput}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  const updatedData = loadChequeBounceReceiptDetails(
+                    chequeBounceFormData.partyName,
+                    chequeBounceFormData.chequeNo,
+                    chequeBounceFormData
+                  );
+                  setChequeBounceFormData((previous) => ({
+                    ...previous,
+                    ...updatedData,
+                    totalAmt: calculateChequeBounceTotal(
+                      updatedData.chequeAmt,
+                      updatedData.chqBounceCharges
+                    ),
+                  }));
+                }}
                 placeholder="Enter cheque no"
                 autoComplete="off"
               />

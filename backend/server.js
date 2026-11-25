@@ -1199,6 +1199,7 @@ const groupSchema = new mongoose.Schema(
   {
     groupCode: { type: String, required: true, trim: true },
     groupName: { type: String, required: true, trim: true },
+    description: { type: String, default: "", trim: true },
     distributorId: { type: String, required: true },
     firmId: { type: String, required: true },
     firmName: { type: String, default: "" },
@@ -1211,6 +1212,7 @@ const categorySchema = new mongoose.Schema(
   {
     categoryCode: { type: String, required: true, trim: true },
     categoryName: { type: String, required: true, trim: true },
+    parentCategory: { type: String, default: "", trim: true },
     distributorId: { type: String, required: true },
     firmId: { type: String, required: true },
     firmName: { type: String, default: "" },
@@ -1515,6 +1517,7 @@ const areaSchema = new mongoose.Schema(
   {
     areaCode: { type: String, required: true, trim: true },
     areaName: { type: String, required: true, trim: true },
+    description: { type: String, default: "", trim: true },
 
     distributorId: { type: String, required: true },
     firmId: { type: String, required: true },
@@ -5644,7 +5647,7 @@ app.post(
   ),
   async (req, res) => {
   try {
-    const { distributorId, firmId, firmName, code, name } = req.body;
+    const { distributorId, firmId, firmName, code, name, description } = req.body;
 
     if (!distributorId || !firmId || !code || !name) {
       return res.status(400).json({
@@ -5656,6 +5659,7 @@ app.post(
     const group = await Group.create({
       groupCode: code.trim(),
       groupName: name.trim(),
+      description: String(description || "").trim(),
       distributorId,
       firmId,
       firmName: firmName || "",
@@ -5878,7 +5882,7 @@ app.post(
   ),
   async (req, res) => {
   try {
-    const { distributorId, firmId, firmName, code, name } = req.body;
+    const { distributorId, firmId, firmName, code, name, parentCategory } = req.body;
 
     if (!distributorId || !firmId || !code || !name) {
       return res.status(400).json({
@@ -5890,6 +5894,7 @@ app.post(
     const category = await Category.create({
       categoryCode: code.trim(),
       categoryName: name.trim(),
+      parentCategory: String(parentCategory || "").trim(),
       distributorId,
       firmId,
       firmName: firmName || "",
@@ -9501,6 +9506,7 @@ app.post(
 
     const areaCode = String(req.body.areaCode || req.body.code || "").trim();
     const areaName = String(req.body.areaName || req.body.name || "").trim();
+    const description = String(req.body.description || "").trim();
 
     if (!distributorId || !firmId) {
       return res.status(400).json({
@@ -9519,6 +9525,7 @@ app.post(
     const area = await Area.create({
       areaCode,
       areaName,
+      description,
       distributorId,
       firmId,
       firmName,
@@ -10265,6 +10272,7 @@ app.post("/api/salesman-area-mappings", ensureConnection,
     const mappings = Array.isArray(req.body.mappings)
       ? req.body.mappings
       : [];
+
     const unmappedAreaCodes = Array.isArray(req.body.unmappedAreaCodes)
       ? req.body.unmappedAreaCodes.map((code) => String(code || "").trim()).filter(Boolean)
       : [];
@@ -10512,6 +10520,9 @@ app.post("/api/area-to-party-mappings", ensureConnection,
     const mappings = Array.isArray(req.body.mappings)
       ? req.body.mappings
       : [];
+    const unmappedAccountCodes = Array.isArray(req.body.unmappedAccountCodes)
+      ? req.body.unmappedAccountCodes.map((code) => String(code || "").trim()).filter(Boolean)
+      : [];
 
     if (!distributorId || !firmId) {
       return res.status(400).json({
@@ -10531,7 +10542,7 @@ app.post("/api/area-to-party-mappings", ensureConnection,
       (m) => m.accountCode && m.accountName && m.areaCode && m.areaName
     );
 
-    if (validMappings.length === 0) {
+    if (validMappings.length === 0 && unmappedAccountCodes.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Please select at least one area.",
@@ -10564,7 +10575,13 @@ app.post("/api/area-to-party-mappings", ensureConnection,
       },
     }));
 
-    await AreaToPartyMapping.bulkWrite(operations);
+    if (operations.length) await AreaToPartyMapping.bulkWrite(operations);
+    if (unmappedAccountCodes.length) {
+      await AreaToPartyMapping.updateMany(
+        { distributorId, firmId, companyCode, accountCode: { $in: unmappedAccountCodes }, isActive: { $ne: false } },
+        { $set: { isActive: false } }
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -11317,6 +11334,37 @@ app.post(
       res.status(error.statusCode || 500).json({ success: false, message: error.message || "Desktop purchase repair failed" });
     } finally {
       session.endSession();
+    }
+  }
+);
+
+app.get(
+  "/api/purchase/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "view"),
+  async (req, res, next) => {
+    try {
+      const purchaseId = String(req.params.id || "").trim();
+      // The static list route is registered later in this file. Let it
+      // handle this reserved path instead of validating "list" as an ID.
+      if (purchaseId === "list") {
+        return next("route");
+      }
+      if (!mongoose.Types.ObjectId.isValid(purchaseId)) {
+        return res.status(400).json({ success: false, message: "Invalid Purchase ID." });
+      }
+      const purchase = await PurchaseHeader.findOne({
+        _id: purchaseId,
+        distributorId: req.auth.distributorId,
+        firmId: req.auth.firmId,
+        isActive: { $ne: false },
+      }).lean();
+      if (!purchase) {
+        return res.status(404).json({ success: false, message: "Purchase not found." });
+      }
+      return res.json({ success: true, purchase });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "Failed to load Purchase." });
     }
   }
 );
@@ -27377,7 +27425,7 @@ app.get(
       firmId,
       isActive: true,
     })
-      .sort({ vDate: -1, billNo: -1 })
+      .sort({ VDate: -1, CreditNoteNo: -1, _id: -1 })
       .lean();
 
     res.json({
@@ -27983,7 +28031,7 @@ app.put("/api/firms/:id", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), a
     const { id } = req.params;
 
     const updatedFirm = await Register.findOneAndUpdate(
-      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      { _id: id, distributorId: req.auth.distributorId },
       {
         firmCode: String(req.body.firmCode || "").trim(),
         firmName: String(req.body.firmName || "").trim(),
@@ -28030,7 +28078,7 @@ app.put("/api/firms/:id", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), a
 app.delete("/api/firms/:id", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
   try {
     const deletedFirm = await Register.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      { _id: req.params.id, distributorId: req.auth.distributorId },
       { $set: { isActive: false }, $inc: { sessionVersion: 1 } }, { new: true }
     );
 
@@ -28061,7 +28109,7 @@ app.put(
   async (req, res) => {
   try {
     const { id } = req.params;
-    const { code, name } = req.body;
+    const { code, name, description } = req.body;
 
     if (!code || !name) {
       return res.status(400).json({
@@ -28075,6 +28123,7 @@ app.put(
       {
         groupCode: code.trim(),
         groupName: name.trim(),
+        description: String(description || "").trim(),
       },
       { new: true, runValidators: true }
     );
@@ -28145,7 +28194,7 @@ app.put(
   async (req, res) => {
   try {
     const { id } = req.params;
-    const { code, name } = req.body;
+    const { code, name, parentCategory } = req.body;
 
     if (!code || !name) {
       return res.status(400).json({
@@ -28159,6 +28208,7 @@ app.put(
       {
         categoryCode: code.trim(),
         categoryName: name.trim(),
+        parentCategory: String(parentCategory || "").trim(),
       },
       { new: true, runValidators: true }
     );
@@ -28910,7 +28960,7 @@ app.put(
   async (req, res) => {
   try {
     const { id } = req.params;
-    const { areaCode, areaName } = req.body;
+    const { areaCode, areaName, description } = req.body;
 
     if (!areaCode || !areaName) {
       return res.status(400).json({
@@ -28924,6 +28974,7 @@ app.put(
       {
         areaCode: areaCode.trim(),
         areaName: areaName.trim(),
+        description: String(description || "").trim(),
       },
       { new: true, runValidators: true }
     );

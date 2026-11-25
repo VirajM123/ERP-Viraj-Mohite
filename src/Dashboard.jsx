@@ -6,6 +6,7 @@ import './DashboardMockup.css';
 import './DashboardHorizontalNav.css';
 import './SalesInvoiceListModern.css';
 import './CompactTransactionLists.css';
+import './Mapping.css';
 import landscapeLogo from "./assets/images/total-solution-landscape.svg";
 import DashboardHome from "./DashboardHome";
 import "./GeneralSetup1.css";
@@ -6468,6 +6469,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setAccountForm({
       accountCode: "",
       accountName: "",
+      openingDate: businessDateIST(),
       address: "",
       town: "",
       state: "MAHARASHTRA",
@@ -8723,13 +8725,36 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     item?.selectedBatch?.Batch ||
     ".";
 
-  const getSalesDetailStock = (item) =>
-    Number(
+  const getSalesDetailStock = (item) => {
+    const productCode = String(
+      item?.productCode || item?.productId || String(item?.product || "").split(" - ")[0] || ""
+    ).trim();
+    const batchNo = String(getSalesDetailBatch(item) || ".").trim();
+    const mrp = Number(item?.mrp ?? item?.MRP ?? item?.selectedBatch?.mrp ?? item?.selectedBatch?.MRP ?? 0);
+    const liveBatch = getCachedSalesBatches({ productCode }).find((batch) =>
+      String(batch.batchNo || batch.batch || batch.Batch || ".").trim() === batchNo &&
+      (mrp === 0 || Number(batch.mrp ?? batch.MRP ?? 0) === mrp)
+    );
+    return Number(
+      liveBatch?.stockQty ??
+      liveBatch?.qty ??
+      liveBatch?.Qty ??
       item?.selectedBatch?.stockQty ??
       item?.selectedBatch?.qty ??
       item?.selectedBatch?.Qty ??
       0
     );
+  };
+
+  useEffect(() => {
+    if (!selectedSalesDetailItem) return;
+    void loadSalesBatchesForProduct(selectedSalesDetailItem);
+  }, [
+    selectedSalesDetailItem?.productCode,
+    selectedSalesDetailItem?.productId,
+    selectedSalesDetailItem?.product,
+    invoiceFormData.godown,
+  ]);
 
   /*
    * Older sales rows can contain an empty purchaseRate field while the
@@ -9493,7 +9518,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     if (!anyOpen) return;
 
-    const dropdownHeight = 340;
+    const dropdownHeight = 280;
 
     const reposition = (anchorRef, isOpen, setPos, fixedWidth) => {
       if (!isOpen || !anchorRef.current) return;
@@ -9905,7 +9930,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   // Area Master State
   const [areas, setAreas] = useState([]);
-  const [areaForm, setAreaForm] = useState({ code: '', name: '' });
+  const [areaForm, setAreaForm] = useState({ code: '', name: '', description: '' });
   const [editAreaId, setEditAreaId] = useState(null);
   // Area Master State
 
@@ -10047,6 +10072,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [areaToPartyListSearch, setAreaToPartyListSearch] = useState('');
   const [areaToPartyCurrentPage, setAreaToPartyCurrentPage] = useState(1);
   const [areaToPartySavingCell, setAreaToPartySavingCell] = useState('');
+  const [areaToPartySaving, setAreaToPartySaving] = useState(false);
+  const [areaToPartyLoading, setAreaToPartyLoading] = useState(false);
+  const areaToPartyRequestRef = useRef(0);
 
   // ==================== SETTLE LOAD STATE VARIABLES ====================
   // Add these with other state declarations
@@ -11216,7 +11244,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         billNo: item.billNo || "",
       });
 
-      const res = await fetch(`${API_URL}/sales/bill?${params.toString()}`);
+      const res = await secureFetch(`${API_URL}/sales/bill?${params.toString()}`);
       const result = await res.json();
 
       if (!res.ok || !result.success) {
@@ -11225,6 +11253,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
       const bill = result.bill;
       setEditingInvoiceId(bill._id);
+      setEditingLoadedSalesBill(isSalesBillAssignedToLoad(bill));
       setOriginalEditingPartyCode(
         String(
           bill.PartyCode ||
@@ -11237,8 +11266,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       const companyName = bill.CompanyName || "";
 
       const [partyMapRes, salesmanMapRes] = await Promise.all([
-        fetch(`${API_URL}/area-to-party-mappings?distributorId=${distributorId}&firmId=${firmId}&companyCode=${companyCode}`),
-        fetch(`${API_URL}/salesman-area-mappings?distributorId=${distributorId}&firmId=${firmId}&companyCode=${companyCode}`),
+        secureFetch(`${API_URL}/area-to-party-mappings?distributorId=${encodeURIComponent(distributorId)}&firmId=${encodeURIComponent(firmId)}&companyCode=${encodeURIComponent(companyCode)}`),
+        secureFetch(`${API_URL}/salesman-area-mappings?distributorId=${encodeURIComponent(distributorId)}&firmId=${encodeURIComponent(firmId)}&companyCode=${encodeURIComponent(companyCode)}`),
       ]);
 
       const partyMapResult = await partyMapRes.json();
@@ -11298,9 +11327,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         billDate: bill.BillDate || new Date().toISOString().split("T")[0],
         godown: bill.GDCode || bill.Godown || "G1",
         company: companyCode || companyName,
+        companyCode,
         area: areaCode,
         party: partyCode,
         BillSeries: bill.BillSeries || "",
+        billSeries: bill.BillSeries || "",
         billNo: bill.BillNo || "",
         billType: bill.BillType || "Credit",
         dueDate: bill.DueDate || "",
@@ -11308,7 +11339,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         narration: bill.Narration || "",
       });
 
-      setInvoiceItems(
+      const loadedSettleItems =
         (bill.items || []).map((x, i) => ({
           ...x,
           id: x.id || Date.now() + i,
@@ -11322,6 +11353,34 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           quantity: x.qty ?? x.quantity ?? x.Qty ?? "",
           Qty: x.qty ?? x.quantity ?? x.Qty ?? "",
           rate: x.rate || x.salesRate || "",
+          batch: x.batch || x.batchNo || "",
+          batchNo: x.batchNo || x.batch || "",
+          units: x.units || x.unit || "PCS",
+          free: x.free ?? x.Free ?? 0,
+          mrp: x.mrp ?? x.MRP ?? "",
+          purchaseRate: getSalesItemPurchaseRate(x),
+          gst: x.gst ?? x.gstPercent ?? "",
+          cgst: x.cgst ?? x.cgstAmount ?? "",
+          sgst: x.sgst ?? x.sgstAmount ?? "",
+          igst: x.igst ?? x.igstAmount ?? "",
+        }));
+      setInvoiceItems(loadedSettleItems);
+      setOriginalLoadedInvoiceItems(
+        loadedSettleItems.map((row) => ({
+          productCode: String(row.productCode || row.productId || "").trim().toUpperCase(),
+          batchNo: String(row.batchNo || row.batch || "").trim().toUpperCase(),
+          units: String(row.units || row.unit || "").trim().toUpperCase(),
+          qty: Number(row.qty ?? row.quantity ?? 0),
+          free: Number(row.free ?? 0),
+          rate: Number(row.rate ?? 0),
+          tprAmt: Number(row.tprAmt ?? 0),
+          schemePct: Number(row.schemePct ?? 0),
+          schemeAmt: Number(row.schemeAmt ?? 0),
+          cdPct: Number(row.cdPct ?? 0),
+          cdAmt: Number(row.cdAmt ?? 0),
+          starPct: Number(row.starPct ?? 0),
+          starAmt: Number(row.starAmt ?? 0),
+          igst: Number(row.igst ?? 0),
         }))
       );
 
@@ -13157,7 +13216,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ["companies", transactionForm || ["Product", "Company Master", "Company Wise Series Setup", "Salesman To Area", "Area To Party"].includes(screen), loadCompanies],
       ["series", transactionForm || screen === "Company Wise Series Setup", loadCompanyWiseSeries],
       ["groups", screen === "Product", loadGroups],
-      ["categories", screen === "Product", loadCategories],
+      ["categories", ["Product", "Category Master"].includes(screen), loadCategories],
       ["products", transactionForm, loadProducts],
       ["accounts", accountPermission.view && (transactionForm || openFormFor === "Account" || screen === "Area To Party"), loadAccounts],
       ["otherAccounts", ["Other Account", "Company Master", "Purchase", "Receipt"].includes(screen), loadOtherAccounts],
@@ -13165,7 +13224,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ["salesmen", transactionForm || screen === "Salesman" || screen === "Salesman To Area", loadSalesmen],
       ["areas", ["Area", "Account", "Salesman To Area", "Area To Party"].includes(screen), loadAreas],
       ["godowns", transactionForm || screen === "GoDown Master", loadGodowns],
-      ["customerBanks", screen === "Customer Bank Master", loadCustomerBanks],
+      ["customerBanks", screen === "Customer Bank Master" || transactionForm, loadCustomerBanks],
     ];
     lookupLoaders.forEach(([key, needed, loader]) => {
       if (needed && !loadedDashboardLookups.current.has(key)) {
@@ -13258,6 +13317,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [accountForm, setAccountForm] = useState({
     accountCode: '',
     accountName: '',
+    openingDate: businessDateIST(),
     address: '',
     town: 'Pune',
     state: 'MAHARASHTRA',
@@ -13382,10 +13442,20 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const createLoadAvailableAreas = Array.from(
     new Set(
       createLoadItems
-        .map((item) => String(item.area || "").trim())
+        .map((item) => String(item.area || item.areaCode || "").trim())
         .filter(Boolean)
     )
   );
+  const getCreateLoadAreaLabel = (areaCode) => {
+    const sourceItem = createLoadItems.find((item) =>
+      String(item.area || item.areaCode || "").trim() === String(areaCode || "").trim()
+    );
+    const masterArea = areas.find((area) =>
+      String(area.areaCode || area.code || "").trim() === String(areaCode || "").trim()
+    );
+    const areaName = sourceItem?.areaName || masterArea?.areaName || masterArea?.name || "";
+    return areaName ? `${areaCode} - ${areaName}` : String(areaCode || "");
+  };
 
   const getSelectedCreateLoadAreaText = () => {
     if (selectedCreateLoadAreas.length === 0) {
@@ -13401,7 +13471,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     }
 
     if (selectedCreateLoadAreas.length === 1) {
-      return selectedCreateLoadAreas[0];
+      return getCreateLoadAreaLabel(selectedCreateLoadAreas[0]);
     }
 
     return `${selectedCreateLoadAreas.length} Areas Selected`;
@@ -13497,6 +13567,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     tinNo: '',
     openingBal: '0.00',
     openingBalType: 'Dr',
+    openingDate: businessDateIST(),
     dlNo1: '',
     dlExp1: '',
     dlNo2: '',
@@ -13521,8 +13592,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   });
 
   // Group/Category forms
-  const [groupForm, setGroupForm] = useState({ code: '', name: '' });
-  const [categoryForm, setCategoryForm] = useState({ code: '', name: '' });
+  const [groupForm, setGroupForm] = useState({ code: '', name: '', description: '' });
+  const [categoryForm, setCategoryForm] = useState({ code: '', name: '', parentCategory: '' });
   const reportMenuItems = Object.fromEntries(
     reportCatalogCategories.map((category) => [
       category.name,
@@ -16411,7 +16482,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
       const method = editFirmId ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const response = await secureFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -16489,7 +16560,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   };
 
   const editFirm = (firm) => {
-    setEditFirmId(firm._id);
+    setEditFirmId(firm._id || firm.id);
 
     setFirmData({
       firmCode: firm.firmCode || "",
@@ -16521,7 +16592,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     if (!window.confirm(`Delete firm "${firm.firmName}"?`)) return;
 
     try {
-      const response = await fetch(`${API_URL}/firms/${id}`, {
+      const response = await secureFetch(`${API_URL}/firms/${id}`, {
         method: "DELETE"
       });
 
@@ -17114,6 +17185,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             groupName:
               group.groupName || "",
 
+            description:
+              group.description || "",
+
             firmName:
               group.firmName || "",
 
@@ -17355,6 +17429,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               categoryName:
                 category.categoryName ||
                 category.name ||
+                "",
+
+              parentCategory:
+                category.parentCategory ||
                 "",
 
               firmName:
@@ -20493,6 +20571,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         return;
       }
 
+      const mappedSalesman = invoiceSalesmanAreaMappings.find(
+        (mapping) =>
+          String(mapping.areaCode || "").trim() ===
+          String(invoiceFormData.area || "").trim()
+      );
+
       /*
       * All blacklist, credit-day, lock-day,
       * credit-bill and credit-amount checks
@@ -20527,6 +20611,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
         partyName:
           selectedAccount.accountName ||
+          "",
+
+        // The selected party is mapped to the selected area. Apply that
+        // area's saved salesman after the party passes billing validation.
+        salesman:
+          mappedSalesman?.salesmanName ||
+          mappedSalesman?.salesmanCode ||
+          prev.salesman ||
           "",
       }));
 
@@ -22501,7 +22593,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     try {
       const { distributorId, firmId } = getFirmSession();
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/stock/batches?distributorId=${encodeURIComponent(distributorId || "")}&firmId=${encodeURIComponent(firmId || "")}&gdCode=${encodeURIComponent(gdCode || "")}&prodCode=${encodeURIComponent(prodCode || "")}`
       );
 
@@ -23108,11 +23200,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
       const [partyResponse, salesmanResponse] =
         await Promise.all([
-          fetch(
+          secureFetch(
             `${API_URL}/area-to-party-mappings?${partyQuery.toString()}`
           ),
 
-          fetch(
+          secureFetch(
             `${API_URL}/salesman-area-mappings?${salesmanQuery.toString()}`
           ),
         ]);
@@ -23327,6 +23419,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       .trim()
       .toUpperCase();
 
+    if (!selectedCompanyCode && !selectedCompanyName) {
+      setCreditFilteredProductList([]);
+      setCreditProductDropdownIndex(-1);
+      return [];
+    }
+
     const usedProductCodes = new Set(
       creditNoteItems
         .filter(
@@ -23457,8 +23555,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           .filter(Boolean);
 
         /*
-        * Allow products from every company only
-        * when no company is selected.
+        * A company must be selected before product lookup. Explicit ALL/MIX
+        * company records retain their configured cross-company behaviour.
         */
         const selectedCompany =
           findCreditCompany(
@@ -23485,7 +23583,6 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           .filter(Boolean);
 
         const isAllCompany =
-          selectedCompanyValues.length === 0 ||
           selectedCompanyValues.some(
             (value) =>
               value === "ALL" ||
@@ -24200,6 +24297,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           isSalesBillAssignedToLoad(
             editingSalesBill
           ) &&
+          !isSettleAdjustMode &&
           runtimeGeneralSetup
             .allowEditBillAfterLoad !== true
         ) {
@@ -27799,17 +27897,20 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         cleanValue,
         "purchase"
       );
+      const shouldApplyCompanySeries =
+        purchaseSeries.configured &&
+        !String(purchaseFormData.vouSer || "").trim();
 
       setPurchaseFormData((previous) => ({
         ...previous,
         company: cleanValue,
         ...(defaultSupplier?.accountGroup === 'SUNDRY CREDITORS' ? { supplier: purchaseSupplierValue(defaultSupplier) } : {}),
-        ...(purchaseSeries.configured
+        ...(shouldApplyCompanySeries
           ? { vouSer: purchaseSeries.value, vouNo: "" }
           : {}),
       }));
 
-      if (purchaseSeries.configured) {
+      if (shouldApplyCompanySeries) {
         setTimeout(
           () => loadNextPurchaseVouNo(purchaseSeries.value),
           0
@@ -31582,7 +31683,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
             });
 
           const mappingResponse =
-            await fetch(
+            await secureFetch(
               `${API_URL}/area-to-party-mappings?${mappingQuery.toString()}`
             );
 
@@ -31981,6 +32082,12 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         .filter(Boolean)
     );
 
+    if (!selectedCompanyCode && !selectedCompanyName) {
+      setDebitFilteredProductList([]);
+      setDebitProductDropdownIndex(-1);
+      return [];
+    }
+
     const normalizeCompanyValue = (
       value
     ) => {
@@ -32076,15 +32183,12 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           .filter(Boolean);
 
         const matchesCompany =
-          !selectedCompanyCode &&
-            !selectedCompanyName
-            ? true
-            : productCompanyValues.includes(
-              selectedCompanyCode
-            ) ||
-            productCompanyValues.includes(
-              selectedCompanyName
-            );
+          productCompanyValues.includes(
+            selectedCompanyCode
+          ) ||
+          productCompanyValues.includes(
+            selectedCompanyName
+          );
 
         return (
           matchesSearch &&
@@ -32201,7 +32305,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         )
       );
 
-      const dropdownHeight = 340;
+      const dropdownHeight = 280;
 
       let top =
         rect.bottom + 4;
@@ -33094,6 +33198,10 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
             companyCode,
             "creditNote"
           );
+        const shouldApplyConfiguredSeries =
+          configuredSeries.configured &&
+          !String(creditNoteFormData.creditNoteSeries || "").trim() &&
+          !String(creditNoteFormData.creditNoteNo || "").trim();
 
         updatedForm = {
           ...updatedForm,
@@ -33101,7 +33209,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           company: companyCode,
           companyCode,
           companyName,
-          ...(configuredSeries.configured
+          ...(shouldApplyConfiguredSeries
             ? {
                 creditNoteSeries:
                   configuredSeries.value,
@@ -33868,7 +33976,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       )
     );
 
-    const dropdownHeight = 340;
+    const dropdownHeight = 280;
 
     let top =
       rect.bottom + 4;
@@ -35441,7 +35549,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           companyCode,
         });
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_URL}/area-to-party-mappings?${params.toString()}`
         );
 
@@ -37030,15 +37138,24 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     }
 
     if (name === "company") {
+      const selectedCompany = companies.find((company) =>
+        String(company.companyCode || company.code || company._id || company.id) === String(cleanValue)
+      );
       const configuredSeries = getConfiguredCompanySeries(
         cleanValue,
         "debitNote"
       );
+      const shouldApplyConfiguredSeries =
+        configuredSeries.configured &&
+        !String(debitNoteFormData.debitNoteSeries || "").trim() &&
+        !String(debitNoteFormData.debitNoteNo || debitNoteFormData.vNo || "").trim();
 
       setDebitNoteFormData((previous) => ({
         ...previous,
         company: cleanValue,
-        ...(configuredSeries.configured
+        companyCode: selectedCompany?.companyCode || selectedCompany?.code || cleanValue,
+        companyName: selectedCompany?.companyName || selectedCompany?.name || cleanValue,
+        ...(shouldApplyConfiguredSeries
           ? {
               debitNoteSeries: configuredSeries.value,
               debitNoteNo: "",
@@ -37055,7 +37172,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   const addDebitNoteItem = useCallback(() => {
     const newItem = {
       id: Date.now(),
-      sr: debitNoteItems.length + 1,
+      sr: 0,
       trn: 'DGR',
       itemCode: '',
       itemName: '',
@@ -37080,9 +37197,12 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       cessAmt: '',
       cessPerP: ''
     };
-    setDebitNoteItems([...debitNoteItems, newItem]);
-    setDebitNoteActiveRow(debitNoteItems.length);
-  }, [debitNoteItems.length]);
+    setDebitNoteItems((previous) => [
+      ...previous,
+      { ...newItem, sr: previous.length + 1 },
+    ]);
+    setDebitNoteActiveRow((previous) => Math.max(previous + 1, 0));
+  }, []);
 
   const updateDebitNoteItem = (index, field, value) => {
     const newItems = [...debitNoteItems];
@@ -43261,10 +43381,10 @@ if (item === "Import Data") {
       setCompanyForm({ code: '', name: '', address: '', branchAddress: '', defaultSupplierId: '' });
     }
     else if (item === 'Group Master') {
-      setGroupForm({ code: '', name: '' });
+      setGroupForm({ code: '', name: '', description: '' });
     }
     else if (item === 'Category Master') {
-      setCategoryForm({ code: '', name: '' });
+      setCategoryForm({ code: '', name: '', parentCategory: '' });
     }
     else if (item === 'Product') {
       setProductForm({
@@ -43301,6 +43421,7 @@ if (item === "Import Data") {
       setAccountForm({
         accountCode: '',
         accountName: '',
+        openingDate: businessDateIST(),
         address: '',
         town: '',
         state: 'MAHARASHTRA',
@@ -43355,6 +43476,7 @@ if (item === "Import Data") {
       setOtherAccountForm({
         accountCode: '',
         accountName: '',
+        openingDate: businessDateIST(),
         accountGroup: 'INCOMES DIRECT',
         bankAccountNo: '',
         ifscCode: '',
@@ -43415,7 +43537,8 @@ if (item === "Import Data") {
     else if (item === 'Area') {
       setAreaForm({
         code: '',
-        name: ''
+        name: '',
+        description: ''
       });
     }
     else if (item === 'GoDown Master') {
@@ -44305,9 +44428,6 @@ else if (item === 'Import Data From Desktop') {
   };
   const closeForm = async () => {
     setIsFormReadOnly(false);
-    const closingCounterSales =
-      openFormFor === "Billing" &&
-      activeSubMenu === "Counter Sales";
 
     const returnContext =
       masterReturnContextRef.current ||
@@ -44343,7 +44463,7 @@ else if (item === 'Import Data From Desktop') {
 
     setOpenFormFor(null);
 
-    if (closingCounterSales) {
+    if (openFormFor === "Billing") {
       setShowSalesList(true);
     }
 
@@ -45324,6 +45444,7 @@ else if (item === 'Import Data From Desktop') {
           name: area.areaName || area.name || "",
           areaCode: area.areaCode || area.code || "",
           areaName: area.areaName || area.name || "",
+          description: area.description || "",
           firmName: area.firmName || "",
           distributorId: area.distributorId || "",
           firmId: area.firmId || "",
@@ -45401,6 +45522,7 @@ else if (item === 'Import Data From Desktop') {
           body: JSON.stringify({
             areaCode,
             areaName,
+            description: String(areaForm.description || "").trim(),
             distributorId,
             firmId,
             firmName,
@@ -45457,6 +45579,7 @@ else if (item === 'Import Data From Desktop') {
       setAreaForm({
         code: "",
         name: "",
+        description: "",
       });
 
       setEditAreaId(null);
@@ -45485,6 +45608,7 @@ else if (item === 'Import Data From Desktop') {
     setAreaForm({
       code: area.areaCode || area.code || "",
       name: area.areaName || area.name || "",
+      description: area.description || "",
     });
 
     setActiveSubMenu("Area");
@@ -45716,6 +45840,7 @@ else if (item === 'Import Data From Desktop') {
       emailId: account.emailId || "-",
       openingBal: account.openingBal || "0.00",
       openingBalType: account.openingBalType || "Dr",
+      openingDate: account.openingDate || businessDateIST(),
       invType: account.invType || "-",
       taxOn: account.taxOn || "-",
       panNo: account.panNo || "-",
@@ -45778,7 +45903,8 @@ else if (item === 'Import Data From Desktop') {
 
     setGroupForm({
       code: group.code || group.groupCode || "",
-      name: group.name || group.groupName || ""
+      name: group.name || group.groupName || "",
+      description: group.description || ""
     });
     setOpenFormFor('Group Master');
   };
@@ -45792,6 +45918,7 @@ else if (item === 'Import Data From Desktop') {
     setCategoryForm({
       code: category.code || category.categoryCode || "",
       name: category.name || category.categoryName || "",
+      parentCategory: category.parentCategory || "",
     });
 
     setOpenFormFor("Category Master");
@@ -47342,6 +47469,7 @@ else if (item === 'Import Data From Desktop') {
         setAccountForm({
           accountCode: "",
           accountName: "",
+          openingDate: businessDateIST(),
           address: "",
           town: "",
           state: "MAHARASHTRA",
@@ -47434,6 +47562,7 @@ else if (item === 'Import Data From Desktop') {
       setAccountForm({
         accountCode: "",
         accountName: "",
+        openingDate: businessDateIST(),
         address: "",
         town: "",
         state: "MAHARASHTRA",
@@ -47490,6 +47619,7 @@ else if (item === 'Import Data From Desktop') {
       setAccountForm({
         accountCode: '',
         accountName: '',
+        openingDate: businessDateIST(),
         address: '',
         town: 'Pune',
         state: 'MAHARASHTRA',
@@ -47950,6 +48080,7 @@ else if (item === 'Import Data From Desktop') {
       setOtherAccountForm({
         accountCode: "",
         accountName: "",
+        openingDate: businessDateIST(),
         accountGroup: "INCOMES DIRECT",
         bankAccountNo: "",
         ifscCode: "",
@@ -48059,7 +48190,7 @@ else if (item === 'Import Data From Desktop') {
       alert(editGroupId ? "Group updated successfully!" : "Group created successfully!");
 
       // ✅ RESET FORM AND CLOSE
-      setGroupForm({ code: "", name: "" });
+      setGroupForm({ code: "", name: "", description: "" });
       setEditGroupId(null);
       closeForm();
     } catch (error) {
@@ -48128,6 +48259,7 @@ else if (item === 'Import Data From Desktop') {
           body: JSON.stringify({
             code: cleanCode,
             name: cleanName,
+            parentCategory: String(categoryForm.parentCategory || "").trim(),
             distributorId,
             firmId,
             firmName,
@@ -48183,6 +48315,7 @@ else if (item === 'Import Data From Desktop') {
       setCategoryForm({
         code: "",
         name: "",
+        parentCategory: "",
       });
 
       setEditCategoryId(null);
@@ -48397,7 +48530,9 @@ else if (item === 'Import Data From Desktop') {
     company?.companyName || company?.name || "";
 
   const handleAreaToPartyCompanySelect = async (company) => {
+    const requestId = ++areaToPartyRequestRef.current;
     setAreaToPartyCompany(company);
+    setAreaToPartyData([]);
     setAreaToPartyFilter("");
     setAreaToPartyEditingRow(-1);
     setAreaToPartyEditingCell("");
@@ -48406,9 +48541,11 @@ else if (item === 'Import Data From Desktop') {
     setAreaToPartyCurrentPage(1);
 
     if (!company || accounts.length === 0) {
-      setAreaToPartyData([]);
-      return;
+      setAreaToPartyLoading(false);
+      return false;
     }
+
+    setAreaToPartyLoading(true);
 
     const baseRows = accounts.map((account, index) => {
       const masterAreaCode = account.areaCode || account.AreaCode || "";
@@ -48423,6 +48560,7 @@ else if (item === 'Import Data From Desktop') {
         partyName: account.partyName || account.PartyName || account.accountName || account.name || "",
         areaCode: masterAreaCode,
         areaName: account.areaName || account.AreaName || masterArea?.name || masterArea?.areaName || "",
+        wasMapped: false,
         closingDate: account.gstClsDate || account.closingDate || account.ClosingDate || "",
         isLock: normalizeYesNo(account.isLock ?? account.IsLock ?? account.isLocked ?? account.IsLocked ?? "NO"),
         isStar: normalizeYesNo(account.isStar ?? account.IsStar ?? "NO"),
@@ -48444,8 +48582,13 @@ else if (item === 'Import Data From Desktop') {
       const distributorId = localStorage.getItem("distributorId");
       const firmId = localStorage.getItem("firmId");
 
-      const res = await fetch(
-        `${API_URL}/area-to-party-mappings?distributorId=${distributorId}&firmId=${firmId}&companyCode=${getCompanyCode(company)}`
+      const params = new URLSearchParams({
+        distributorId,
+        firmId,
+        companyCode: getCompanyCode(company),
+      });
+      const res = await secureFetch(
+        `${API_URL}/area-to-party-mappings?${params.toString()}`
       );
 
       const result = await res.json();
@@ -48466,15 +48609,22 @@ else if (item === 'Import Data From Desktop') {
             ...row,
             areaCode: saved.areaCode || "",
             areaName: saved.areaName || "",
+            wasMapped: true,
           }
           : row;
       });
 
+      if (requestId !== areaToPartyRequestRef.current) return false;
       setAreaToPartyData(mergedRows);
+      return true;
     } catch (error) {
+      if (requestId !== areaToPartyRequestRef.current) return false;
       console.error(error);
       setAreaToPartyData([]);
       alert(error.message || "Failed to load Area To Party mappings");
+      return false;
+    } finally {
+      if (requestId === areaToPartyRequestRef.current) setAreaToPartyLoading(false);
     }
   };
 
@@ -48485,7 +48635,7 @@ else if (item === 'Import Data From Desktop') {
   }, [accounts]);
 
   const handleAreaToPartyCellClick = (rowIndex, cellType) => {
-    if (cellType !== "areaName") return;
+    if (cellType !== "areaName" || areaToPartySaving) return;
 
     setAreaToPartyEditingRow(rowIndex);
     setAreaToPartyEditingCell(`areaName_${rowIndex}`);
@@ -48611,7 +48761,7 @@ else if (item === 'Import Data From Desktop') {
       value={row[field] ?? ""}
       title={String(row[field] ?? "")}
       aria-label={field}
-      disabled={areaToPartySavingCell.startsWith(`${row.accountId}_`)}
+      disabled={areaToPartySaving || areaToPartySavingCell.startsWith(`${row.accountId}_`)}
       onChange={(event) =>
         handleAreaToPartyAccountFieldChange(rowIndex, field, event.target.value)
       }
@@ -48631,7 +48781,7 @@ else if (item === 'Import Data From Desktop') {
       className="mapping-inline-editor mapping-inline-select"
       value={normalizeYesNo(row[field])}
       aria-label={field}
-      disabled={areaToPartySavingCell.startsWith(`${row.accountId}_`)}
+      disabled={areaToPartySaving || areaToPartySavingCell.startsWith(`${row.accountId}_`)}
       onChange={(event) => {
         const value = event.target.value;
         handleAreaToPartyAccountFieldChange(rowIndex, field, value);
@@ -48644,13 +48794,17 @@ else if (item === 'Import Data From Desktop') {
   );
 
   const saveAreaToPartyMapping = async () => {
+    if (areaToPartySaving || areaToPartyLoading) return;
     if (!areaToPartyCompany) {
       return alert("Please select company");
     }
 
     const mappedRows = areaToPartyData.filter((row) => row.areaCode);
+    const unmappedAccountCodes = areaToPartyData
+      .filter((row) => row.wasMapped && !row.areaCode && row.accountCode)
+      .map((row) => row.accountCode);
 
-    if (mappedRows.length === 0) {
+    if (mappedRows.length === 0 && unmappedAccountCodes.length === 0) {
       return alert("Please select at least one area");
     }
     if (mappedRows.some((row) => !row.areaName || !row.accountCode || !row.accountName)) {
@@ -48665,8 +48819,10 @@ else if (item === 'Import Data From Desktop') {
       return alert("Distributor/Firm not found. Please login again.");
     }
 
+    setAreaToPartySaving(true);
+
     try {
-      const res = await fetch(`${API_URL}/area-to-party-mappings`, {
+      const res = await secureFetch(`${API_URL}/area-to-party-mappings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -48674,6 +48830,7 @@ else if (item === 'Import Data From Desktop') {
         body: JSON.stringify({
           companyCode: getCompanyCode(areaToPartyCompany),
           companyName: getCompanyName(areaToPartyCompany),
+          unmappedAccountCodes,
 
           mappings: mappedRows.map((row) => ({
             accountCode: row.accountCode,
@@ -48694,10 +48851,15 @@ else if (item === 'Import Data From Desktop') {
         return alert(result.message || "Area To Party mapping save failed");
       }
 
-      alert("Area To Party mapping saved successfully!");
+      // Read the saved rows back so the mapping list reflects database state.
+      const reloaded = await handleAreaToPartyCompanySelect(areaToPartyCompany);
+      if (reloaded) alert("Area To Party mapping saved successfully!");
+      else alert("Mapping was saved, but the list could not be reloaded. Select the company again.");
     } catch (error) {
       console.error(error);
-      alert("Server not connected. Area To Party mapping save failed.");
+      alert(error.message || "Area To Party mapping save failed.");
+    } finally {
+      setAreaToPartySaving(false);
     }
   };
   /* =========================================================
@@ -55761,6 +55923,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               "billDate",
                               "TrnDate",
                               "trnDate",
+                              "VDate",
+                              "vDate",
                             ],
                             ""
                           );
@@ -55773,6 +55937,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               "billSeries",
                               "TrnSeries",
                               "trnSeries",
+                              "CreditNoteSeries",
+                              "creditNoteSeries",
+                              "DebitNoteSeries",
+                              "debitNoteSeries",
                               "vouSer",
                               "VouSer",
                             ],
@@ -55786,6 +55954,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               "billNo",
                               "TrnNo",
                               "trnNo",
+                              "CreditNoteNo",
+                              "creditNoteNo",
+                              "DebitNoteNo",
+                              "debitNoteNo",
                               "vouNo",
                               "VouNo",
                             ],
@@ -59121,29 +59293,52 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         const partyCode = bill.PartyCode || bill.partyCode || "";
 
         const [partyMapRes, salesmanMapRes] = await Promise.all([
-          fetch(`${API_URL}/area-to-party-mappings?distributorId=${distributorId}&firmId=${firmId}&companyCode=${companyCode}`),
-          fetch(`${API_URL}/salesman-area-mappings?distributorId=${distributorId}&firmId=${firmId}&companyCode=${companyCode}`),
+          secureFetch(`${API_URL}/area-to-party-mappings?distributorId=${encodeURIComponent(distributorId)}&firmId=${encodeURIComponent(firmId)}&companyCode=${encodeURIComponent(companyCode)}`),
+          secureFetch(`${API_URL}/salesman-area-mappings?distributorId=${encodeURIComponent(distributorId)}&firmId=${encodeURIComponent(firmId)}&companyCode=${encodeURIComponent(companyCode)}`),
         ]);
 
         const partyMapResult = await partyMapRes.json();
         const salesmanMapResult = await salesmanMapRes.json();
 
-        setInvoiceAreaPartyMappings(partyMapResult.mappings || []);
+        const partyMappings = partyMapResult.mappings || [];
+        const resolvedAreaCode = areaCode || partyMappings.find((mapping) =>
+          String(mapping.areaName || "").trim() === String(bill.AreaName || bill.areaName || "").trim()
+        )?.areaCode || "";
+        const resolvedPartyCode = partyCode || partyMappings.find((mapping) =>
+          String(mapping.accountName || "").trim() === String(bill.PartyName || bill.partyName || "").trim()
+        )?.accountCode || "";
+        if (
+          resolvedAreaCode &&
+          resolvedPartyCode &&
+          !partyMappings.some((mapping) => String(mapping.accountCode) === String(resolvedPartyCode))
+        ) {
+          partyMappings.push({
+            areaCode: resolvedAreaCode,
+            areaName: bill.AreaName || bill.areaName || "",
+            accountCode: resolvedPartyCode,
+            accountName: bill.PartyName || bill.partyName || "",
+          });
+        }
+        setInvoiceAreaPartyMappings(partyMappings);
         setInvoiceSalesmanAreaMappings(salesmanMapResult.mappings || []);
 
         const salesmanName =
           bill.SalesmanName ||
           bill.salesmanName ||
           bill.salesman ||
+          salesmen.find((salesman) => String(salesman.salesmanCode || salesman.code) === String(bill.SalesmanCode || bill.salesmanCode || ""))?.salesmanName ||
+          salesmen.find((salesman) => String(salesman.salesmanCode || salesman.code) === String(bill.SalesmanCode || bill.salesmanCode || ""))?.name ||
           "";
 
         setInvoiceFormData({
           billDate: bill.BillDate || bill.billDate || businessDateIST(),
           godown: bill.GDCode || bill.Godown || bill.godown || "G1",
           company: companyCode,
-          area: areaCode,
-          party: partyCode,
+          companyCode,
+          area: resolvedAreaCode,
+          party: resolvedPartyCode,
           BillSeries: bill.BillSeries || bill.billSeries || "",
+          billSeries: bill.BillSeries || bill.billSeries || "",
           billNo: bill.BillNo || bill.billNo || "",
           billType: bill.BillType || bill.billType || "Credit",
           dueDate: bill.DueDate || bill.dueDate || "",
@@ -59614,6 +59809,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       }
     }
     else if (type === 'Purchase') {
+     try {
+       const purchaseId = item?._id || item?.id || item?.originalItem?._id || actualItem?._id || actualItem?.id;
+       if (!purchaseId) {
+         alert("Purchase ID not found.");
+         return;
+       }
+       const response = await secureFetch(`${API_URL}/purchase/${encodeURIComponent(purchaseId)}`);
+       const result = await response.json();
+       if (!response.ok || !result.success || !result.purchase) {
+         throw new Error(result.message || "Unable to load the complete purchase voucher.");
+       }
+       item = result.purchase;
+     } catch (error) {
+       console.error("Purchase edit load error:", error);
+       alert(error.message || "Unable to load purchase for editing.");
+       return;
+     }
      setPurchaseFormData({
         supplier: item.supplierId || item.supplierCode || item.historicalSnapshot?.supplier?.code || item.supplierName || item.partyName || item.supplier || '',
         company: item.companyId || item.companyCode || item.historicalSnapshot?.company?.code || item.company || item.companyName || '',
@@ -67473,7 +67685,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               }}
                                             />
 
-                                            <span>{area}</span>
+                                            <span>{getCreateLoadAreaLabel(area)}</span>
                                           </label>
                                         )
                                       )}
@@ -67486,7 +67698,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <div className="premium-load-field premium-load-narration">
                               <label>Narration</label>
 
-                              <input
+                              <textarea
                                 className="erp-input"
                                 name="narration"
                                 value={
@@ -67494,6 +67706,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 }
                                 onChange={handleCreateLoadInputChange}
                                 placeholder="Enter narration for this load..."
+                                rows={2}
                               />
                             </div>
                           </div>
@@ -70900,7 +71113,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         className="firm-ui-btn firm-ui-btn-primary"
                         onClick={() => {
                           setEditGroupId(null);
-                          setGroupForm({ code: "", name: "" });
+                          setGroupForm({ code: "", name: "", description: "" });
                           setOpenFormFor("Group Master");
                         }}
                       >
@@ -71013,7 +71226,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     className="firm-ui-btn firm-ui-btn-primary"
                                     onClick={() => {
                                       setEditGroupId(null);
-                                      setGroupForm({ code: '', name: '' });
+                                      setGroupForm({ code: '', name: '', description: '' });
                                       setOpenFormFor('Group Master');
                                     }}
                                   >
@@ -71203,7 +71416,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <label>Parent Category</label>
                       <select name="parentCategory" value={categoryForm.parentCategory || ''} onChange={handleCategoryInput}>
                         <option value="">None</option>
-                        {categoriesState.map((cat) => (
+                        {categoriesState.filter((cat) => String(cat.id || cat._id) !== String(editCategoryId || '')).map((cat) => (
                           <option key={cat.id || cat._id} value={cat.name || cat.categoryName}>
                             {cat.name || cat.categoryName}
                           </option>
@@ -71273,7 +71486,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         className="firm-ui-btn firm-ui-btn-primary"
                         onClick={() => {
                           setEditCategoryId(null);
-                          setCategoryForm({ code: "", name: "" });
+                          setCategoryForm({ code: "", name: "", parentCategory: "" });
                           setOpenFormFor("Category Master");
                         }}
                       >
@@ -71392,7 +71605,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     className="firm-ui-btn firm-ui-btn-primary"
                                     onClick={() => {
                                       setEditCategoryId(null);
-                                      setCategoryForm({ code: '', name: '' });
+                                      setCategoryForm({ code: '', name: '', parentCategory: '' });
                                       setOpenFormFor('Category Master');
                                     }}
                                   >
@@ -72407,7 +72620,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <input
                         name="openingDate"
                         type="date"
-                        value={accountForm.openingDate || ''}
+                        value={accountForm.openingDate || businessDateIST()}
                         onChange={handleAccountInput}
                       />
                     </div>
@@ -72856,7 +73069,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         onClick={() => {
                           setEditAccountId(null);
                           setAccountForm({
-                            accountCode: '', accountName: '', address: '', town: 'Pune',
+                            accountCode: '', accountName: '', openingDate: businessDateIST(), address: '', town: 'Pune',
                             state: 'MAHARASHTRA', pinCode: '', phoneNo: '', mobileNo: '',
                             emailId: '', tinNo: '', openingBal: '0.00', openingBalType: 'Dr',
                             dlNo1: '', dlExp1: '', dlNo2: '', dlExp2: '', birthDate: '',
@@ -73005,7 +73218,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         onClick={() => {
                                           setEditAccountId(null);
                                           setAccountForm({
-                                            accountCode: '', accountName: '', address: '', town: 'Pune',
+                                            accountCode: '', accountName: '', openingDate: businessDateIST(), address: '', town: 'Pune',
                                             state: 'MAHARASHTRA', pinCode: '', phoneNo: '', mobileNo: '',
                                             emailId: '', tinNo: '', openingBal: '0.00', openingBalType: 'Dr',
                                             dlNo1: '', dlExp1: '', dlNo2: '', dlExp2: '', birthDate: '',
@@ -73218,7 +73431,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <input
                         name="openingDate"
                         type="date"
-                        value={otherAccountForm.openingDate || '2026-04-04'}
+                        value={otherAccountForm.openingDate || businessDateIST()}
                         onChange={handleOtherAccountInput}
                       />
                     </div>
@@ -73614,7 +73827,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         onClick={() => {
                           setEditOtherAccountId(null);
                           setOtherAccountForm({
-                            accountCode: '', accountName: '', accountGroup: 'INCOMES DIRECT',
+                            accountCode: '', accountName: '', openingDate: businessDateIST(), accountGroup: 'INCOMES DIRECT',
                             bankAccountNo: '', ifscCode: '', branchName: '',
                             address: '', town: '', state: '', country: 'India', pinCode: '',
                             phoneNo: '', mobileNo: '', emailId: '', tinNo: '',
@@ -74607,6 +74820,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           setAreaForm({
                             code: "",
                             name: "",
+                            description: "",
                           });
                           setOpenFormFor("Area");
                         }}
@@ -74763,6 +74977,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       setAreaForm({
                                         code: "",
                                         name: "",
+                                        description: "",
                                       });
 
                                       setOpenFormFor(
@@ -81949,6 +82164,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           id="area-party-company"
                           className="mapping-company-select"
                           value={areaToPartyCompany?.id || ''}
+                          disabled={areaToPartySaving}
                           onChange={(e) => handleAreaToPartyCompanySelect(companies.find(c => c.id == e.target.value))}
                         >
                           <option value="">Select Company</option>
@@ -81958,7 +82174,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="mapping-header-actions">
-                      <button type="button" className="mapping-button mapping-button-primary" onClick={saveAreaToPartyMapping}><Save size={14} />Save Mapping</button>
+                      <button type="button" className="mapping-button mapping-button-primary" onClick={saveAreaToPartyMapping} disabled={areaToPartySaving || areaToPartyLoading}><Save size={14} />{areaToPartySaving ? "Saving..." : "Save Mapping"}</button>
                       <button type="button" className="mapping-button mapping-export-button"><FileSpreadsheet size={14} />Export Excel</button>
                       <button type="button" className="mapping-button mapping-export-button"><FileText size={14} />Export PDF</button>
                       <button type="button" className="mapping-button mapping-export-button"><Printer size={14} />Print List</button>
@@ -81988,7 +82204,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <div className="mapping-table-card">
                     <div className="grid-header">
                       <h3>Mapping for {areaToPartyCompany.code} - {areaToPartyCompany.name} ({areaToPartyData.length} accounts)</h3>
-                      <div className="form-actions"><button className="btn-save" onClick={saveAreaToPartyMapping}>💾 Save Mapping</button><button className="btn-cancel" onClick={resetAreaToPartyMapping}>🔄 Reset</button></div>
+                      <div className="form-actions"><button className="btn-save" onClick={saveAreaToPartyMapping} disabled={areaToPartySaving}>💾 {areaToPartySaving ? "Saving..." : "Save Mapping"}</button><button className="btn-cancel" onClick={resetAreaToPartyMapping} disabled={areaToPartySaving}>🔄 Reset</button></div>
                     </div>
                     <div className="mapping-table-wrap">
                       <table className="mapping-list-table">

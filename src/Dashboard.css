@@ -50209,8 +50209,7 @@ td {
 .sales-billing-header-actions > .billing-save-button,
 .purchase-billing-header-actions > .purchase-header-save,
 .debit-credit-header-actions > .debit-credit-save-btn,
-.receipt-billing-header-actions > .receipt-save-draft-btn,
-.mapping-header-actions > .mapping-button-primary {
+.receipt-billing-header-actions > .receipt-save-draft-btn {
   display: none !important;
 }
 

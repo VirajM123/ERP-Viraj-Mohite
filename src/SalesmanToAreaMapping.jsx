@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { API_URL } from "./api/config";
+import { secureFetch } from "./SecuritySetup";
 import "./Mapping.css";
 
 const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) => {
@@ -87,7 +88,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
     }));
 
     try {
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/salesman-area-mappings?distributorId=${encodeURIComponent(
           distributorId
         )}&firmId=${encodeURIComponent(firmId)}&companyCode=${encodeURIComponent(
@@ -145,8 +146,14 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
   };
 
   const handleSave = async () => {
+    if (saving || loading) return;
     if (!loadedCompany) {
       alert("Please select company and click Go");
+      return;
+    }
+
+    if (String(getCompanyCode(loadedCompany)) !== String(selectedCompanyCode)) {
+      alert("Click Go to load the selected company before saving.");
       return;
     }
 
@@ -172,7 +179,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
     setSaving(true);
 
     try {
-      const res = await fetch(`${API_URL}/salesman-area-mappings`, {
+      const res = await secureFetch(`${API_URL}/salesman-area-mappings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -200,10 +207,26 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
         return;
       }
 
+      const refreshed = await secureFetch(
+        `${API_URL}/salesman-area-mappings?distributorId=${encodeURIComponent(distributorId)}&firmId=${encodeURIComponent(firmId)}&companyCode=${encodeURIComponent(getCompanyCode(loadedCompany))}`
+      );
+      const refreshedResult = await refreshed.json();
+      if (!refreshed.ok || refreshedResult.success === false) {
+        throw new Error(refreshedResult.message || "Mapping was saved but could not be reloaded.");
+      }
+      const savedByArea = new Map(
+        (refreshedResult.mappings || []).map((mapping) => [String(mapping.areaCode), mapping])
+      );
+      setMappingRows((previous) => previous.map((row) => {
+        const saved = savedByArea.get(String(row.areaCode));
+        return saved
+          ? { ...row, salesmanCode: saved.salesmanCode || "", salesmanName: saved.salesmanName || "" }
+          : { ...row, salesmanCode: "", salesmanName: "" };
+      }));
       alert("Salesman to Area mapping saved successfully!");
     } catch (error) {
       console.error("Mapping save error:", error);
-      alert("Backend server is not running.");
+      alert(error.message || "Salesman to Area mapping save failed.");
     } finally {
       setSaving(false);
     }
@@ -233,6 +256,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
                 id="salesman-area-company"
                 className="mapping-company-select"
                 value={selectedCompanyCode}
+                disabled={saving || loading}
                 onChange={(e) => setSelectedCompanyCode(e.target.value)}
               >
                 <option value="">Select Company</option>
@@ -249,7 +273,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
                 type="button"
                 className="mapping-button mapping-go-button"
                 onClick={handleGo}
-                disabled={loading}
+                disabled={loading || saving}
               >
                 {loading ? "Loading..." : "Go"}
               </button>
@@ -328,6 +352,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
                       <select
                         className="mapping-row-select"
                         value={row.salesmanCode}
+                        disabled={saving || loading}
                         onChange={(e) =>
                           handleSalesmanChange(originalIndex, e.target.value)
                         }
@@ -349,7 +374,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
                       <div className="mapping-row-actions">
                         <button type="button" aria-label={`View ${row.areaName}`}><Eye size={14} /></button>
                         <button type="button" aria-label={`Edit ${row.areaName}`} onClick={(event) => event.currentTarget.closest("tr")?.querySelector("select")?.focus()}><Pencil size={14} /></button>
-                        <button type="button" className="is-delete" aria-label={`Clear ${row.areaName}`} onClick={() => handleSalesmanChange(originalIndex, "")}><Trash2 size={14} /></button>
+                        <button type="button" className="is-delete" disabled={saving || loading} aria-label={`Clear ${row.areaName}`} onClick={() => handleSalesmanChange(originalIndex, "")}><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>

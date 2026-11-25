@@ -87,6 +87,7 @@ const receiptSchema = new mongoose.Schema(
         bankCashName: String,
         bankCashGroup: String,
         receiptAmount: Number,
+        unadjustedAmount: { type: Number, default: 0 },
 
         chequeNo: String,
         chequeDate: String,
@@ -308,6 +309,8 @@ const pdcDocketSchema = new mongoose.Schema({
     clearingDate: String,
 
     narration: String,
+
+    status: { type: String, enum: ["ACTIVE", "REVERSED"], default: "ACTIVE" },
 
     totalAmount: Number,
     totalCheques: Number,
@@ -1090,15 +1093,27 @@ router.post(
         remark: String(item.remark || "").trim(),
       })).filter((item) => item.nowAdjust > 0 || item.discAmt > 0);
 
-      if (!bills.length || bills.some((item) => !item.trnNo || item.nowAdjust < 0 || item.discAmt < 0)) {
-        return res.status(400).json({ success: false, message: "Valid positive bill allocations are required." });
+      if (bills.some((item) => !item.trnNo || item.nowAdjust < 0 || item.discAmt < 0)) {
+        return res.status(400).json({ success: false, message: "Each bill allocation must have a valid bill number and non-negative values." });
       }
       const receiptAmount = Number(body.receiptAmount || 0);
       const cashAllocated = bills.reduce((sum, item) => sum + item.nowAdjust, 0);
       const discountTotal = bills.reduce((sum, item) => sum + item.discAmt, 0);
-      if (!Number.isFinite(receiptAmount) || receiptAmount <= 0 || Math.abs(receiptAmount - cashAllocated) > 0.01) {
-        return res.status(400).json({ success: false, message: "Receipt amount must equal the current cash allocations." });
+      const bankCash = String(body.bankCash || "").trim();
+      const isCashReceipt = /^cash$/i.test(bankCash);
+      if (!bankCash) {
+        return res.status(400).json({ success: false, message: "Cash or Bank account is required." });
       }
+      if (!isCashReceipt && !String(body.chequeNo || "").trim()) {
+        return res.status(400).json({ success: false, message: "Cheque number is required for a bank receipt." });
+      }
+      if (!String(body.partyId || body.partyName || "").trim()) {
+        return res.status(400).json({ success: false, message: "Party is required for a receipt." });
+      }
+      if (!Number.isFinite(receiptAmount) || receiptAmount <= 0 || cashAllocated > receiptAmount + 0.01) {
+        return res.status(400).json({ success: false, message: "Receipt amount must be positive and at least the cash allocated to bills." });
+      }
+      const unadjustedAmount = Number(Math.max(receiptAmount - cashAllocated, 0).toFixed(2));
 
       let savedReceipt;
       await session.withTransaction(async () => {
@@ -1251,6 +1266,7 @@ router.post(
           firmId: req.auth.firmId,
           rno,
           receiptAmount,
+          unadjustedAmount,
           receiptBills: bills,
           idempotencyKey,
           status: "POSTED",
@@ -1605,6 +1621,7 @@ router.get(
       const filter = {
         distributorId,
         firmId,
+        status: { $ne: "REVERSED" },
       };
 
       const andConditions = [];
@@ -1993,6 +2010,7 @@ router.put(
   "/receipt/:id",
   securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "edit"),
   async (req, res) => {
+    const session = await mongoose.startSession();
     try {
       const receiptId =
         String(
@@ -2020,8 +2038,8 @@ router.put(
             "Receipt not found."
         });
       }
-      if (existingReceipt.status === "POSTED") {
-        return res.status(409).json({ success: false, message: "Posted receipts are immutable. Reverse this receipt and create a corrected receipt." });
+      if (existingReceipt.status === "REVERSED") {
+        return res.status(409).json({ success: false, message: "A reversed receipt cannot be edited." });
       }
 
       const body =
@@ -2056,6 +2074,7 @@ router.put(
             );
           })
           .map((item) => ({
+            ...(item.openingTransactionId ? { openingTransactionId: String(item.openingTransactionId) } : {}),
             trnSeries:
               String(
                 item.trnSeries ??
@@ -2112,16 +2131,6 @@ router.put(
                 item.remark || ""
               ).trim()
           }));
-
-      if (
-        adjustedBills.length === 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "At least one adjusted bill is required."
-        });
-      }
 
       const missingBillNumber =
         adjustedBills.find(
@@ -2184,8 +2193,26 @@ router.put(
         });
       }
 
+      const receiptAmount = Number(body.receiptAmount || 0);
+      const cashAllocated = adjustedBills.reduce((sum, bill) => sum + Number(bill.nowAdjust || 0), 0);
+      const discountTotal = adjustedBills.reduce((sum, bill) => sum + Number(bill.discAmt || 0), 0);
+      const bankCash = String(body.bankCash || "").trim();
+      const isCashReceipt = /^cash$/i.test(bankCash);
+      if (!bankCash) {
+        return res.status(400).json({ success: false, message: "Cash or Bank account is required." });
+      }
+      if (!isCashReceipt && !String(body.chequeNo || "").trim()) {
+        return res.status(400).json({ success: false, message: "Cheque number is required for a bank receipt." });
+      }
+      if (!String(body.partyId || body.partyName || "").trim()) {
+        return res.status(400).json({ success: false, message: "Party is required for a receipt." });
+      }
+      if (!Number.isFinite(receiptAmount) || receiptAmount <= 0 || cashAllocated > receiptAmount + 0.01) {
+        return res.status(400).json({ success: false, message: "Receipt amount must be positive and at least the cash allocated to bills." });
+      }
+
       const firstAdjustedBill =
-        adjustedBills[0];
+        adjustedBills[0] || {};
 
       const updateData = {
         receiptDate:
@@ -2241,10 +2268,8 @@ drawerBankName:
     ""
   ).trim(),
 
-        receiptAmount:
-          Number(
-            body.receiptAmount
-          ) || 0,
+        receiptAmount,
+        unadjustedAmount: Number(Math.max(receiptAmount - cashAllocated, 0).toFixed(2)),
 
         chequeNo:
           body.chequeNo || "",
@@ -2298,20 +2323,237 @@ drawerBankName:
         distributorId
       };
 
-      const updatedReceipt =
-        await Receipt.findOneAndUpdate(
-          tenantFilter(req, { _id: receiptId }),
+      let updatedReceipt;
+      await session.withTransaction(async () => {
+        // Re-read inside the transaction so a concurrent reversal or edit
+        // cannot leave invoice allocations and journals out of sync.
+        const currentReceipt = await Receipt.findOne(
+          tenantFilter(req, { _id: receiptId, status: "POSTED" })
+        ).session(session);
+        if (!currentReceipt) {
+          throw Object.assign(
+            new Error("Receipt not found or already reversed."),
+            { statusCode: 404 }
+          );
+        }
 
-          {
-            $set:
-              updateData
-          },
+        const before = currentReceipt.toObject();
+        const sales = mongoose.connection.collection("T_Sal_Header");
 
-          {
-            new: true,
-            runValidators: true
+        // First release every allocation recorded by the original receipt.
+        // Do this before reversing the journal and reserving the replacement
+        // allocations, so an edited receipt can safely move to another bill.
+        for (const bill of currentReceipt.receiptBills || []) {
+          const allocation =
+            Number(bill.nowAdjust || 0) +
+            Number(bill.discAmt || 0);
+          if (allocation <= 0 || bill.legacyUnmatched) continue;
+
+          if (bill.openingTransactionId) {
+            await releaseOpening(
+              bill.openingTransactionId,
+              allocation,
+              session
+            );
+            continue;
           }
+
+          const billNo = Number.isFinite(Number(bill.trnNo))
+            ? Number(bill.trnNo)
+            : bill.trnNo;
+          const salesBill = await sales.findOne(
+            tenantFilter(req, {
+              BillSeries: String(bill.trnSeries || ""),
+              BillNo: billNo,
+            }),
+            { session, projection: { receiptAllocated: 1 } }
+          );
+          if (salesBill) {
+            await sales.updateOne(
+              { _id: salesBill._id },
+              {
+                $set: {
+                  receiptAllocated: Math.max(
+                    0,
+                    Number(salesBill.receiptAllocated || 0) - allocation
+                  ),
+                },
+              },
+              { session }
+            );
+          }
+        }
+
+        await reverseOpeningAwareJournal(
+          {
+            distributorId,
+            firmId,
+            sourceType: "RECEIPT",
+            sourceId: String(currentReceipt._id),
+            createdBy: req.auth.userId,
+            documentDate: body.receiptDate || currentReceipt.receiptDate,
+            reason: body.reason || "Receipt edit reversal",
+          },
+          currentReceipt.receiptBills,
+          session
         );
+
+        // Then reserve the revised bill allocations. A series-free reference
+        // is accepted only when it identifies exactly one sales bill.
+        for (const bill of adjustedBills) {
+          const allocation =
+            Number(bill.nowAdjust || 0) +
+            Number(bill.discAmt || 0);
+          if (bill.openingTransactionId) {
+            const opening = await allocateOpening(
+              req,
+              bill.openingTransactionId,
+              allocation,
+              "Dr",
+              body.partyId || body.partyName,
+              session,
+              body.receiptDate
+            );
+            bill.trnSeries = opening.transactionSeries;
+            bill.trnNo = opening.transactionNo;
+            bill.trnDate = opening.date;
+            continue;
+          }
+
+          const billNo = Number.isFinite(Number(bill.trnNo))
+            ? Number(bill.trnNo)
+            : bill.trnNo;
+          const billFilter = tenantFilter(req, {
+            BillNo: billNo,
+            ...(bill.trnSeries ? { BillSeries: bill.trnSeries } : {}),
+          });
+          const salesBills = await sales
+            .find(
+              billFilter,
+              {
+                session,
+                projection: {
+                  NetAmount: 1,
+                  BillAmount: 1,
+                  receiptAllocated: 1,
+                },
+              }
+            )
+            .limit(2)
+            .toArray();
+          if (salesBills.length === 0) {
+            throw Object.assign(
+              new Error(
+                `Sales bill ${bill.trnSeries}-${bill.trnNo} was not found in this firm.`
+              ),
+              { statusCode: 404 }
+            );
+          }
+          if (salesBills.length > 1) {
+            throw Object.assign(
+              new Error(
+                `Sales bill ${bill.trnNo} is ambiguous. Select its bill series and retry.`
+              ),
+              { statusCode: 409 }
+            );
+          }
+
+          const salesBill = salesBills[0];
+          const billAmount = Number(
+            salesBill.NetAmount ?? salesBill.BillAmount ?? 0
+          );
+          const reserved = await sales.updateOne(
+            {
+              _id: salesBill._id,
+              $expr: {
+                $gte: [
+                  {
+                    $subtract: [
+                      billAmount,
+                      { $ifNull: ["$receiptAllocated", 0] },
+                    ],
+                  },
+                  allocation,
+                ],
+              },
+            },
+            { $inc: { receiptAllocated: allocation } },
+            { session }
+          );
+          if (reserved.modifiedCount !== 1) {
+            throw Object.assign(
+              new Error(
+                `Receipt exceeds the pending amount for bill ${bill.trnSeries}-${bill.trnNo}.`
+              ),
+              { statusCode: 409 }
+            );
+          }
+        }
+
+        Object.assign(currentReceipt, {
+          ...updateData,
+          receiptBills: adjustedBills,
+          status: "POSTED",
+          reversedAt: null,
+          reversedBy: "",
+          reversalReason: "",
+          editUser: req.auth.userId || updateData.editUser || "",
+        });
+        updatedReceipt = await currentReceipt.save({ session });
+
+        await postBalancedJournal(
+          {
+            distributorId,
+            firmId,
+            sourceType: "RECEIPT",
+            sourceId: String(currentReceipt._id),
+            documentNo: String(currentReceipt.rno),
+            documentDate: String(currentReceipt.receiptDate || ""),
+            createdBy: req.auth.userId,
+            lines: [
+              {
+                accountCode: bankCash,
+                debit: receiptAmount,
+                credit: 0,
+                narration: currentReceipt.narration || "Receipt repost",
+              },
+              ...(discountTotal > 0
+                ? [
+                    {
+                      accountCode: "DISCOUNT_ALLOWED",
+                      debit: discountTotal,
+                      credit: 0,
+                      narration: "Receipt discount",
+                    },
+                  ]
+                : []),
+              {
+                accountCode: String(
+                  currentReceipt.partyId ||
+                    currentReceipt.partyName ||
+                    "SUNDRY_DEBTORS"
+                ),
+                debit: 0,
+                credit: receiptAmount + discountTotal,
+                narration: currentReceipt.narration || "Receipt repost",
+              },
+            ],
+          },
+          session
+        );
+        await writeAuditEvent(
+          req,
+          {
+            entityType: "RECEIPT",
+            entityId: String(currentReceipt._id),
+            action: "EDIT_REPOST",
+            reason: body.reason || "Receipt corrected",
+            before,
+            after: updatedReceipt.toObject(),
+          },
+          session
+        );
+      });
 
       return res.status(200).json({
         success: true,
@@ -2328,13 +2570,15 @@ drawerBankName:
         error
       );
 
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         success: false,
 
         message:
           error.message ||
           "Receipt update failed."
       });
+    } finally {
+      await session.endSession();
     }
   }
 );
@@ -2813,6 +3057,11 @@ router.get(
        */
       const filter = {
         $and: [
+          {
+            status: {
+              $ne: "REVERSED"
+            }
+          },
           {
             $or: [
               {
@@ -3472,6 +3721,11 @@ router.get(
             const filter = {
                 $and: [
                     {
+                        status: {
+                            $ne: "REVERSED"
+                        }
+                    },
+                    {
                         $or: [
                             {
                                 distributorId
@@ -3910,10 +4164,18 @@ router.delete(
   async (req, res) => {
     try {
 
-        await PDCDocket.findOneAndUpdate(tenantFilter(req, { _id: req.params.id }), { $set: { status: "REVERSED" } });
+        const docket = await PDCDocket.findOneAndUpdate(
+            tenantFilter(req, { _id: req.params.id, status: { $ne: "REVERSED" } }),
+            { $set: { status: "REVERSED" } },
+            { new: true }
+        );
+        if (!docket) {
+            return res.status(404).json({ success: false, message: "PDC Docket not found or already reversed." });
+        }
 
         res.json({
-            success: true
+            success: true,
+            message: "PDC Docket reversed successfully."
         });
 
     } catch (err) {
