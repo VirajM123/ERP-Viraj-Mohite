@@ -1652,6 +1652,10 @@ salesmanAreaMappingSchema.index(
   { distributorId: 1, firmId: 1, companyCode: 1, areaCode: 1 },
   { unique: true }
 );
+/* Supports the Sales Invoice salesman-first area lookup and its area-name sort. */
+salesmanAreaMappingSchema.index(
+  { distributorId: 1, firmId: 1, companyCode: 1, isActive: 1, areaName: 1 }
+);
 
 const SalesmanAreaMapping = mongoose.model(
   "Mas_SalesmanAreaMapping",
@@ -2083,6 +2087,10 @@ const areaToPartyMappingSchema = new mongoose.Schema(
 areaToPartyMappingSchema.index(
   { distributorId: 1, firmId: 1, companyCode: 1, accountCode: 1 },
   { unique: true }
+);
+/* Supports the Sales Invoice area-to-outlet lookup for a selected company. */
+areaToPartyMappingSchema.index(
+  { distributorId: 1, firmId: 1, companyCode: 1, isActive: 1, areaCode: 1, accountCode: 1 }
 );
 
 const AreaToPartyMapping = mongoose.model(
@@ -2591,10 +2599,24 @@ const buildSalesEntryTypeFilter = (value) => {
   };
 };
 
-const buildSalesHistoricalSnapshot = async ({ distributorId, firmId, companyCode, partyCode, items, session }) => {
+const buildSalesHistoricalSnapshot = async ({
+  distributorId,
+  firmId,
+  companyCode,
+  partyCode,
+  items,
+  session,
+  company: verifiedCompany = null,
+  party: verifiedParty = null,
+}) => {
   const productCodes = [...new Set(items.map((item) => String(item.productCode || item.productId || item.code || "").trim()).filter(Boolean))];
-  const company = await Company.findOne({ distributorId, firmId, companyCode }).session(session).lean();
-  const party = await Account.findOne({ distributorId, firmId, accountCode: partyCode }).session(session).lean();
+  /*
+   * Sales creation has already verified these two records in the same
+   * transaction. Reusing them avoids duplicate reads without changing the
+   * snapshot data or its transaction consistency.
+   */
+  const company = verifiedCompany || await Company.findOne({ distributorId, firmId, companyCode }).session(session).lean();
+  const party = verifiedParty || await Account.findOne({ distributorId, firmId, accountCode: partyCode }).session(session).lean();
   const products = await Product.find({ distributorId, firmId, productCode: { $in: productCodes } }).session(session).lean();
   const productMap = new Map(products.map((product) => [String(product.productCode), product]));
   return {
@@ -10242,7 +10264,7 @@ app.get("/api/salesman-area-mappings", ensureConnection,
 
     const mappings = await SalesmanAreaMapping.find(filter).sort({
       areaName: 1,
-    });
+    }).lean();
 
     res.json({
       success: true,
@@ -12883,7 +12905,14 @@ app.post(
         minimumValue: Number(lastSalesForCounter?.BillNo || 0),
       });
       historicalSnapshot = await buildSalesHistoricalSnapshot({
-        distributorId, firmId, companyCode: CompanyCode, partyCode: PartyCode, items, session,
+        distributorId,
+        firmId,
+        companyCode: CompanyCode,
+        partyCode: PartyCode,
+        items,
+        session,
+        company: salesCompany,
+        party: salesParty,
       });
 
       // A historical migration reconstructs documents in their original

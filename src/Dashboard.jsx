@@ -7817,6 +7817,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   const [invoiceAreaPartyMappings, setInvoiceAreaPartyMappings] = useState([]);
   const [invoiceSalesmanAreaMappings, setInvoiceSalesmanAreaMappings] = useState([]);
+  const [invoiceSaving, setInvoiceSaving] = useState(false);
+  const invoiceSaveInFlightRef = useRef(false);
+  /*
+   * True only when Salesman was explicitly chosen before Area. This lets the
+   * new salesman-first flow coexist with the established area-first/default
+   * salesman flow without changing its behavior.
+   */
+  const [isInvoiceSalesmanFirstSelection, setIsInvoiceSalesmanFirstSelection] = useState(false);
 
   const [isSettleAdjustMode, setIsSettleAdjustMode] = useState(false);
   const settleAdjustHeaderReadOnly = isSettleAdjustMode === true;
@@ -7930,6 +7938,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         freshDraft.formData
       )
     );
+    setIsInvoiceSalesmanFirstSelection(false);
 
     setInvoiceItems(
       cloneInvoiceDraftValue(
@@ -10076,6 +10085,85 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [areaToPartyLoading, setAreaToPartyLoading] = useState(false);
   const areaToPartyRequestRef = useRef(0);
 
+  const invoiceMappingKey = (value) => String(value ?? "").trim().toUpperCase();
+
+  const resolveInvoiceSalesmanCode = (value) => {
+    const selectedValue = invoiceMappingKey(value);
+    if (!selectedValue) return "";
+
+    const mappedSalesman = invoiceSalesmanAreaMappings.find((mapping) =>
+      invoiceMappingKey(mapping.salesmanCode) === selectedValue ||
+      invoiceMappingKey(mapping.salesmanName) === selectedValue
+    );
+    if (mappedSalesman?.salesmanCode) return String(mappedSalesman.salesmanCode).trim();
+
+    const salesman = salesmen.find((candidate) =>
+      invoiceMappingKey(candidate.salesmanCode || candidate.code) === selectedValue ||
+      invoiceMappingKey(candidate.salesmanName || candidate.name) === selectedValue
+    );
+
+    return String(salesman?.salesmanCode || salesman?.code || "").trim();
+  };
+
+  const isInvoiceSalesmanMappedToArea = (salesmanValue, areaValue) => {
+    const salesmanCode = resolveInvoiceSalesmanCode(salesmanValue);
+    const areaKey = invoiceMappingKey(areaValue);
+
+    return Boolean(salesmanCode && areaKey) && invoiceSalesmanAreaMappings.some((mapping) =>
+      invoiceMappingKey(mapping.salesmanCode) === invoiceMappingKey(salesmanCode) &&
+      (invoiceMappingKey(mapping.areaCode) === areaKey ||
+        invoiceMappingKey(mapping.areaName) === areaKey)
+    );
+  };
+
+  const selectedInvoiceSalesmanCode = resolveInvoiceSalesmanCode(
+    invoiceFormData.salesman
+  );
+
+  const invoiceAreaOptions = (() => {
+    const areasByCode = new Map();
+
+    invoiceAreaPartyMappings.forEach((mapping) => {
+      const areaCode = String(mapping.areaCode || "").trim();
+      const areaName = String(mapping.areaName || "").trim();
+      const uniqueKey = invoiceMappingKey(areaCode || areaName);
+      if (uniqueKey && !areasByCode.has(uniqueKey)) {
+        areasByCode.set(uniqueKey, mapping);
+      }
+    });
+
+    const options = Array.from(areasByCode.values());
+    if (!isInvoiceSalesmanFirstSelection || !selectedInvoiceSalesmanCode) {
+      return options;
+    }
+
+    return options.filter((area) =>
+      invoiceSalesmanAreaMappings.some((mapping) =>
+        invoiceMappingKey(mapping.salesmanCode) ===
+          invoiceMappingKey(selectedInvoiceSalesmanCode) &&
+        (invoiceMappingKey(mapping.areaCode) === invoiceMappingKey(area.areaCode) ||
+          invoiceMappingKey(mapping.areaName) === invoiceMappingKey(area.areaName))
+      )
+    );
+  })();
+
+  const invoicePartyOptions = invoiceAreaPartyMappings.filter((mapping) => {
+    const sameArea =
+      invoiceMappingKey(mapping.areaCode) === invoiceMappingKey(invoiceFormData.area) ||
+      invoiceMappingKey(mapping.areaName) === invoiceMappingKey(invoiceFormData.area);
+    const hasValidCode = String(mapping.accountCode || "").trim() !== "";
+    const hasValidName = String(mapping.accountName || "").trim() !== "";
+    const salesmanAllowsArea =
+      !isInvoiceSalesmanFirstSelection ||
+      !selectedInvoiceSalesmanCode ||
+      isInvoiceSalesmanMappedToArea(
+        selectedInvoiceSalesmanCode,
+        invoiceFormData.area
+      );
+
+    return sameArea && hasValidCode && hasValidName && salesmanAllowsArea;
+  });
+
   // ==================== SETTLE LOAD STATE VARIABLES ====================
   // Add these with other state declarations
   const [showSettleLoad, setShowSettleLoad] = useState(false);
@@ -11326,6 +11414,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
       setInvoiceAreaPartyMappings(partyMappings);
       setInvoiceSalesmanAreaMappings(salesmanMappings);
+      setIsInvoiceSalesmanFirstSelection(false);
 
       setInvoiceFormData({
         billDate: bill.BillDate || new Date().toISOString().split("T")[0],
@@ -20461,6 +20550,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
         setInvoiceAreaPartyMappings([]);
         setInvoiceSalesmanAreaMappings([]);
+        setIsInvoiceSalesmanFirstSelection(false);
 
         return;
       }
@@ -20509,6 +20599,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       setCurrentProductIndex(-1);
       setFilteredProductList([]);
       setProductDropdownIndex(-1);
+      setIsInvoiceSalesmanFirstSelection(false);
 
       /*
       * Normal company:
@@ -20518,6 +20609,41 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       * Load mappings from every company.
       */
 
+
+      return;
+    }
+
+    if (name === "salesman") {
+      const hasSalesmanSelection = Boolean(
+        String(cleanValue || "").trim()
+      );
+
+      setIsInvoiceSalesmanFirstSelection(
+        hasSalesmanSelection
+      );
+
+      setInvoiceFormData((previous) => {
+        const selectedAreaIsMapped =
+          !hasSalesmanSelection ||
+          !previous.area ||
+          isInvoiceSalesmanMappedToArea(
+            cleanValue,
+            previous.area
+          );
+
+        return {
+          ...previous,
+          salesman: cleanValue,
+          ...(selectedAreaIsMapped
+            ? {}
+            : {
+                area: "",
+                party: "",
+                partyCode: "",
+                partyName: "",
+              }),
+        };
+      });
 
       return;
     }
@@ -20540,19 +20666,34 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         runtimeGeneralSetup
           ?.defaultSalesman === true;
 
-      setInvoiceFormData((previous) => ({
-        ...previous,
+      setInvoiceFormData((previous) => {
+        const keepSelectedSalesman =
+          Boolean(previous.salesman) &&
+          isInvoiceSalesmanMappedToArea(
+            previous.salesman,
+            cleanValue
+          );
 
-        area: cleanValue,
-        party: "",
+        return {
+          ...previous,
 
-        salesman:
-          shouldSelectDefaultSalesman
-            ? salesmanMap?.salesmanName ||
-            salesmanMap?.salesmanCode ||
-            ""
-            : "",
-      }));
+          area: cleanValue,
+          party: "",
+
+          /*
+           * A salesman chosen first must stay selected. The existing
+           * area-first behavior still applies its mapped default salesman.
+           */
+          salesman:
+            keepSelectedSalesman
+              ? previous.salesman
+              : shouldSelectDefaultSalesman
+                ? salesmanMap?.salesmanName ||
+                salesmanMap?.salesmanCode ||
+                ""
+                : "",
+        };
+      });
 
       return;
     }
@@ -20620,9 +20761,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         // The selected party is mapped to the selected area. Apply that
         // area's saved salesman after the party passes billing validation.
         salesman:
+          prev.salesman ||
           mappedSalesman?.salesmanName ||
           mappedSalesman?.salesmanCode ||
-          prev.salesman ||
           "",
       }));
 
@@ -23125,6 +23266,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     setInvoiceAreaPartyMappings([]);
     setInvoiceSalesmanAreaMappings([]);
+    setIsInvoiceSalesmanFirstSelection(false);
 
     setInvoiceItems([]);
 
@@ -24272,6 +24414,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   };
 
   const saveInvoice = async () => {
+    if (invoiceSaveInFlightRef.current) return;
+
+    invoiceSaveInFlightRef.current = true;
+    setInvoiceSaving(true);
+
     try {
       /*
 * Protect loaded Sales Bills during update.
@@ -25376,6 +25523,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         salesman: '', // ✅ RESET
         narration: '' // ✅ RESET
       });
+      setIsInvoiceSalesmanFirstSelection(false);
 
       // ✅ RESET SUMMARY
       setInvoiceSummary({
@@ -25464,6 +25612,9 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     } catch (error) {
       console.error(error);
       alert("Server not connected. Sales not saved.");
+    } finally {
+      invoiceSaveInFlightRef.current = false;
+      setInvoiceSaving(false);
     }
   };
   // ✅ FOCUS ON PARTY FIELD WHEN BILLING FORM OPENS
@@ -44283,6 +44434,7 @@ else if (item === 'Import Data From Desktop') {
 
       narration: "",
     });
+    setIsInvoiceSalesmanFirstSelection(false);
 
     setInvoiceItems([]);
 
@@ -59334,6 +59486,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         }
         setInvoiceAreaPartyMappings(partyMappings);
         setInvoiceSalesmanAreaMappings(salesmanMapResult.mappings || []);
+        setIsInvoiceSalesmanFirstSelection(false);
 
         const salesmanName =
           bill.SalesmanName ||
@@ -75902,20 +76055,26 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           type="button"
                           className="billing-action-button billing-save-button"
                           onClick={saveInvoice}
+                          disabled={invoiceSaving}
                         >
                           <span className="billing-button-icon">✓</span>
 
-                          {editingInvoiceId ? "Update" : "Save"}
+                          {invoiceSaving
+                            ? "Saving..."
+                            : editingInvoiceId ? "Update" : "Save"}
                         </button>
 
                         <button
                           type="button"
                           className="billing-action-button billing-save-print-button"
                           onClick={saveInvoice}
+                          disabled={invoiceSaving}
                         >
                           <span className="billing-button-icon">✓</span>
 
-                          {editingInvoiceId
+                          {invoiceSaving
+                            ? "Saving..."
+                            : editingInvoiceId
                             ? "Update Invoice"
                             : "Save Invoice"}
                         </button>
@@ -76106,16 +76265,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           >
                             <option value="">Select</option>
 
-                            {[
-                              ...new Map(
-                                invoiceAreaPartyMappings.map(
-                                  (mapping) => [
-                                    mapping.areaCode,
-                                    mapping,
-                                  ]
-                                )
-                              ).values(),
-                            ].map((mapping) => (
+                            {invoiceAreaOptions.map((mapping) => (
                               <option
                                 key={mapping.areaCode}
                                 value={mapping.areaCode}
@@ -76210,20 +76360,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 Select party
                               </option>
 
-                              {invoiceAreaPartyMappings
-                                .filter((mapping) => {
-                                  const sameArea =
-                                    String(mapping.areaCode || "").trim() ===
-                                    String(invoiceFormData.area || "").trim();
-
-                                  const hasValidCode =
-                                    String(mapping.accountCode || "").trim() !== "";
-
-                                  const hasValidName =
-                                    String(mapping.accountName || "").trim() !== "";
-
-                                  return sameArea && hasValidCode && hasValidName;
-                                })
+                              {invoicePartyOptions
                                 .map((mapping) => {
                                   const isBlacklisted =
                                     mapping.blackListed === "YES" ||
@@ -77982,8 +78119,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         type="button"
                         className="billing-mobile-save"
                         onClick={saveInvoice}
+                        disabled={invoiceSaving}
                       >
-                        {editingInvoiceId
+                        {invoiceSaving
+                          ? "Saving..."
+                          : editingInvoiceId
                           ? "Update Invoice"
                           : "Save Invoice"}
                       </button>
