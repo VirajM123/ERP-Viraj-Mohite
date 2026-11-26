@@ -27,7 +27,7 @@ const printAccountDetailsSchema = new mongoose.Schema(
       showTaxSummary: { type: Boolean, default: true },
     },
     outputSettings: {
-      reportNumber: { type: String, default: "1", enum: ["1", "2", "3"] },
+      reportNumber: { type: String, default: "1", enum: ["1", "2", "3", "unique_a5"] },
       paperSize: { type: String, default: "A4", enum: ["A4", "A5"] },
       orientation: { type: String, default: "portrait", enum: ["portrait", "landscape"] },
       fontSizePercent: { type: Number, default: 150, min: 80, max: 150 },
@@ -102,12 +102,12 @@ router.put("/", requirePrintAdministrator, async (req, res) => {
 
     const printContent = req.body.printContent || {};
     const outputSettings = req.body.outputSettings || {};
-    const paperSize = ["A4", "A5"].includes(outputSettings.paperSize)
-      ? outputSettings.paperSize
-      : current?.outputSettings?.paperSize || "A4";
-    const reportNumber = ["1", "2", "3"].includes(String(outputSettings.reportNumber))
+    const reportNumber = ["1", "2", "3", "unique_a5"].includes(String(outputSettings.reportNumber))
       ? String(outputSettings.reportNumber)
       : current?.outputSettings?.reportNumber || "1";
+    const paperSize = reportNumber === "unique_a5" ? "A5" : ["A4", "A5"].includes(outputSettings.paperSize)
+      ? outputSettings.paperSize
+      : current?.outputSettings?.paperSize || "A4";
     const requestedFontSize = Number(outputSettings.fontSizePercent);
     const fontSizePercent = Number.isFinite(requestedFontSize)
       ? Math.min(150, Math.max(80, Math.round(requestedFontSize)))

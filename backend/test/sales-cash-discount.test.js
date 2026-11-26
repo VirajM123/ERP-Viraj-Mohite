@@ -32,3 +32,26 @@ for (const mode of ['ITEM_WISE_GROSS', 'ITEM_WISE_GROSS_SCHEME']) {
     assert.equal(rows[1].amount, '227.74');
   });
 }
+
+test('a manual amount overrides bill-wide percentages and remains on later recalculation', () => {
+  const context = vm.createContext({
+    cloneInvoiceDraftValue: value => structuredClone(value),
+    getInvoiceCashDiscountMode: () => 'BILL_GROSS_AMOUNT',
+    getSalesItemTotalQty: row => Number(row.qty),
+    invoiceRound: value => Math.round((value + Number.EPSILON) * 100) / 100,
+    calculateInvoiceRowTax: (row, discount) => {
+      const net = Number(row.grossAmt) - Number(row.schemeAmt) - discount;
+      return { commercialNet: net, taxable: net, cgst: 0, sgst: 0, igst: 0 };
+    },
+  });
+  vm.runInContext(`${source.slice(start, end)}\nglobalThis.recalculate = recalculateInvoiceCashDiscount;`, context);
+  const rows = context.recalculate([
+    { productCode: 'A', qty: 1, rate: 100, schemePct: '', schemeAmt: 10, cdPct: 5, cdAmt: 7 },
+    { productCode: 'B', qty: 1, rate: 100, schemePct: '', schemeAmt: 0, cdPct: 5, cdAmt: 5 },
+  ], { changedIndex: 0, changedField: 'cdAmt' });
+  assert.equal(rows[0].cdPct, '');
+  assert.equal(rows[0].schemeAmt, '10.00');
+  assert.equal(rows[0].cdAmt, '7.00');
+  assert.equal(rows[0].amount, '83.00');
+  assert.equal(context.recalculate(rows)[0].cdAmt, '7.00');
+});

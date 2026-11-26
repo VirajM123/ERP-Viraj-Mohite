@@ -41,6 +41,10 @@ test("administrator can persist report 3 and copies with a redacted audit event"
     assert.equal(update.outputSettings.orientation, "landscape");
     assert.equal(auditPayload.after.bankDetailsChanged, true);
     assert.equal(JSON.stringify(auditPayload).includes("1234"), false);
+    await handler({ auth: { role: "DISTRIBUTOR_ADMIN", userId: "u", firmId: "f", distributorId: "d" }, body: { outputSettings: { reportNumber: "unique_a5", paperSize: "A4" } }, headers: {} }, response);
+    assert.equal(update.outputSettings.reportNumber, "unique_a5");
+    assert.equal(update.outputSettings.paperSize, "A5");
+    assert.equal(update.outputSettings.orientation, "landscape");
   } finally {
     model.findOne = saved.findOne; model.findOneAndUpdate = saved.findOneAndUpdate;
     mongoose.startSession = saved.startSession; audit.create = saved.auditCreate;

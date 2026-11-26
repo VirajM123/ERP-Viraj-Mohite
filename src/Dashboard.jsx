@@ -627,6 +627,11 @@ const Dashboard = ({ onLogout }) => {
       label: "3",
     },
 
+    {
+      value: "unique_a5",
+      label: "Unique A5",
+    },
+
   ];
 
   const SALES_BILL_PAPER_SIZES = [
@@ -3851,7 +3856,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         ? "landscape"
         : "portrait";
 
-    const normalizedReportNumber = ["1", "2", "3", "4", "5", "6"].includes(
+    const normalizedReportNumber = ["1", "2", "3", "4", "5", "6", "unique_a5"].includes(
       String(reportNumber)
     )
       ? String(reportNumber)
@@ -3867,12 +3872,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     /*
      * A5 landscape has only 138mm of printable height after margins.
-     * Keep its typography at the designed 100% maximum so a short invoice
-     * and its footer stay together on one physical sheet. A4 keeps the
-     * user's saved font scale unchanged.
+     * Respect the saved font preference while keeping a modest upper bound
+     * so the footer remains on the physical sheet. The previous 100% cap
+     * silently ignored the configured print size and produced tiny invoices.
      */
     const effectiveFontScale = isA5
-      ? Math.min(normalizedFontSizePercent, 100) / 100
+      ? Math.min(normalizedFontSizePercent, 120) / 100
       : normalizedFontSizePercent / 100;
 
     const pageClass = [
@@ -4518,7 +4523,29 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       }).join("");
     };
 
+    const uniqueInvoice = (copyNumber) => {
+      const productsPerPage = 8;
+      const itemPages = Array.from(
+        { length: Math.max(1, Math.ceil(visibleItems.length / productsPerPage)) },
+        (_, pageIndex) => visibleItems.slice(pageIndex * productsPerPage, (pageIndex + 1) * productsPerPage)
+      );
+      return itemPages.map((pageItems, pageIndex) => `
+        <main class="${pageClass}">
+          ${copies > 1 ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>` : ""}
+          <header class="unique-header">
+            <div><strong>${text(firmName)}</strong>${joinAddress(firmAddressLines)}<div>State: ${text(firmState)} &nbsp; Code: ${text(firmStateCode)}</div><div>Phone: ${text(firmPhone || firmMobile)}</div><div>GSTIN: ${text(firmGstNo)}</div></div>
+            <div class="unique-meta"><strong>TAX-INVOICE</strong><div>INVOICE NO: ${text(`${billSeries || ""}${billNo || ""}`)}</div><div>INVOICE DATE: ${text(formatInvoiceDate(billDate))}</div><div>Page ${pageIndex + 1} of ${itemPages.length}</div></div>
+          </header>
+          <section class="unique-party"><div><b>Details of Receiver (Billed to)</b><br><strong>${text(partyName)}</strong>${joinAddress(partyAddressLines)}<div>State: ${text(partyState)} / ${text(partyStateCode)}</div><div>GSTIN: ${text(partyGstNo)}</div></div><div><b>Details of Consignee (Shipped to)</b><br><strong>${text(partyName)}</strong>${joinAddress(partyAddressLines)}<div>State: ${text(partyState)} / ${text(partyStateCode)}</div><div>GSTIN: ${text(partyGstNo)}</div></div></section>
+          <section class="unique-items"><table><colgroup><col style="width:4%"><col style="width:25%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:7%"><col style="width:8%"><col style="width:8%"><col style="width:10%"><col style="width:7%"><col style="width:9%"></colgroup><thead><tr><th>Sr</th><th>Product Name</th><th>HSN</th><th>MRP</th><th>Qty</th><th>Rate</th><th>Sch</th><th>CD</th><th>Taxable</th><th>GST</th><th>Net Amt</th></tr></thead><tbody>${pageItems.map((item, index) => `<tr><td>${pageIndex * productsPerPage + index + 1}</td><td>${text(item.productName)}</td><td>${text(item.hsn)}</td><td>${money(item.mrp)}</td><td>${qty(item.qty)}</td><td>${money(item.rate)}</td><td>${money(item.schemeAmount)}</td><td>${money(item.cashDiscountAmount)}</td><td>${money(item.taxableAmount)}</td><td>${money(safeNumber(item.cgstAmount) + safeNumber(item.sgstAmount) + safeNumber(item.igstAmount))}</td><td>${money(item.netAmount)}</td></tr>`).join("")}</tbody></table></section>
+          ${pageIndex === itemPages.length - 1 ? `<footer class="unique-footer"><div><div><b>Amount in words:</b> ${text(amountInWords, "Zero Only")}</div>${showBankDetails && (bankName || bankAccountNo || bankIfsc) ? `<div><b>Bank:</b> ${text(bankName)} &nbsp; <b>A/C:</b> ${text(bankAccountNo)} &nbsp; <b>IFSC:</b> ${text(bankIfsc)}</div>` : ""}${showDeclaration ? `<div>${termsAndConditionsHtml}</div>` : ""}<div>Receiver's Stamp &amp; Sign</div><div>For ${text(firmName)}</div></div><div class="unique-totals"><div>Gross Amount <b>${money(grossAmount)}</b></div><div>Scheme <b>${money(schemeAmount)}</b></div><div>Cash Discount <b>${money(cashDiscountAmount)}</b></div><div>CGST <b>${money(cgstAmount)}</b></div><div>SGST <b>${money(sgstAmount)}</b></div><div>IGST <b>${money(igstAmount)}</b></div><div>Round Off <b>${money(roundingAmount)}</b></div><div><strong>NET AMOUNT</strong><strong>${money(netAmount)}</strong></div></div></footer>` : ""}
+        </main>`).join("");
+    };
+
     const oneInvoice = (copyNumber) => {
+      if (normalizedReportNumber === "unique_a5") {
+        return uniqueInvoice(copyNumber);
+      }
       if (normalizedReportNumber === "2") {
         return reportTwoInvoice(copyNumber);
       }
@@ -5403,9 +5430,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .invoice-report-1 .crystal-table th,
             .invoice-report-1 .crystal-table td { font-size: .8em; }
             .invoice-a4.invoice-report-1 .crystal-table th,
-            .invoice-a4.invoice-report-1 .crystal-table td { font-size: 11px; }
+            .invoice-a4.invoice-report-1 .crystal-table td { font-size: .8em; }
             .invoice-a5.invoice-report-1 .crystal-table th,
-            .invoice-a5.invoice-report-1 .crystal-table td { font-size: 9.5px; }
+            .invoice-a5.invoice-report-1 .crystal-table td { font-size: max(8.5px, .9em); }
             .invoice-report-1 .invoice-quick-totals { font-size: .8em; }
             .invoice-report-1 .invoice-bottom { font-size: calc(8px * var(--invoice-font-scale, 1.5)); }
             .invoice-report-1 .footer-detail-row,
@@ -5675,37 +5702,33 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               letter-spacing: -0.05px;
             }
             .invoice-a4.invoice-report-1 .crystal-table td.number,
-            .invoice-a4.invoice-report-1 .crystal-table td.center { font-size: 11px; }
+            .invoice-a4.invoice-report-1 .crystal-table td.center { font-size: .8em; }
             .invoice-a5.invoice-report-1 .crystal-table td.number,
-            .invoice-a5.invoice-report-1 .crystal-table td.center { font-size: 9.5px; }
+            .invoice-a5.invoice-report-1 .crystal-table td.center { font-size: max(8.5px, .9em); }
             .invoice-a4.invoice-report-2 .r2-items th,
             .invoice-a4.invoice-report-2 .r2-items td { font-size: 9.5px; }
             .invoice-a5.invoice-report-2 .r2-items th,
             .invoice-a5.invoice-report-2 .r2-items td { font-size: 9.5px; }
 
-            /* Format 1 uses one consistent 10px size on A4 and A5. */
-            .invoice-report-1,
-            .invoice-report-1 .firm-name,
-            .invoice-report-1 .tax-heading,
-            .invoice-report-1 .party-heading,
-            .invoice-report-1 .party-name,
-            .invoice-report-1 .crystal-table th,
-            .invoice-report-1 .crystal-table td,
-            .invoice-report-1 .invoice-quick-totals,
-            .invoice-report-1 .invoice-bottom,
-            .invoice-report-1 .footer-detail-row,
-            .invoice-report-1 .footer-total-row,
-            .invoice-report-1 .format-one-terms,
-            .invoice-report-1 .tax-summary-table,
-            .invoice-report-1 .grand-total-row,
-            .invoice-report-1 .invoice-footer-closing {
-              font-size: 10px !important;
-            }
-
             /* Compact A5 Format 1 sections so ten rows and summary fit. */
             .invoice-a5.invoice-report-1 .report-top { min-height: 20mm; }
             .invoice-a5.invoice-report-1 .party-grid { min-height: 20mm; }
             .invoice-a5.invoice-report-1 .invoice-footer-summary-grid { min-height: 20mm; }
+
+            .invoice-report-unique_a5 { padding: 3mm 4mm; font: 10px/1.25 Arial, sans-serif; }
+            .invoice-report-unique_a5, .invoice-report-unique_a5 * { font-family: Arial, sans-serif; }
+            .unique-header { display: grid; grid-template-columns: 62% 38%; min-height: 25mm; border-bottom: 1px solid #000; }
+            .unique-header strong { font-size: 12px; }
+            .unique-meta { padding-left: 3mm; }
+            .unique-meta strong { display: block; margin-bottom: 2mm; font-size: 14px; }
+            .unique-party { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; padding: 1mm 0; border-bottom: 1px solid #000; }
+            .unique-items { min-height: 41mm; }
+            .unique-items table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+            .unique-items th, .unique-items td { padding: .5mm .3mm; border-bottom: 1px solid #777; overflow-wrap: anywhere; text-align: right; font-size: 9px; }
+            .unique-items th:nth-child(2), .unique-items td:nth-child(2) { text-align: left; }
+            .unique-footer { display: grid; grid-template-columns: 65% 35%; gap: 2mm; padding-top: 1mm; border-top: 1px solid #000; font-size: 9px; }
+            .unique-footer > div:first-child > div { margin-bottom: 1mm; }
+            .unique-totals > div { display: flex; justify-content: space-between; gap: 2mm; }
 
             @media print {
               html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
@@ -5722,8 +5745,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               .invoice-a5 .invoice-quick-totals strong,
               .invoice-a5 .footer-total-row strong,
               .invoice-a5 .tax-summary-table .number { font-size: 7px; font-weight: 700; }
-              .invoice-a4.invoice-report-1 .crystal-table td.number { font-size: 10px; }
-              .invoice-a5.invoice-report-1 .crystal-table td.number { font-size: 10px; }
+              .invoice-a4.invoice-report-1 .crystal-table td.number { font-size: .8em; }
+              .invoice-a5.invoice-report-1 .crystal-table td.number { font-size: max(8.5px, .9em); }
               .invoice-report-1 .invoice-quick-totals strong,
               .invoice-report-1 .footer-total-row strong,
               .invoice-report-1 .tax-summary-table .number { font-size: inherit; }
@@ -5737,6 +5760,15 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                 overflow: hidden !important;
                 break-inside: avoid-page !important;
                 page-break-inside: avoid !important;
+              }
+              /* Long addresses or terms must flow onto another page rather
+                 than silently disappear beyond the A5 clipping boundary. */
+              .invoice-a5.invoice-report-unique_a5 {
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                break-inside: auto !important;
+                page-break-inside: auto !important;
               }
               .invoice-a5.invoice-report-1 .party-grid { min-height: 22mm; }
               .invoice-a5.invoice-report-1 .invoice-footer-summary-grid { min-height: 22mm; }
@@ -8095,7 +8127,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     includeNarration: false,
     showPageNumbers: true,
 
-    printLayout: "landscape",
+    printLayout: "portrait",
 
     productWiseSelectedColumns: [
       ...defaultProductWiseColumns,
@@ -21213,8 +21245,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           : []
       );
 
-    const cashMode =
-      getInvoiceCashDiscountMode();
+    const cashMode = getInvoiceCashDiscountMode();
+    const isBillWiseCash = !["ITEM_WISE_GROSS", "ITEM_WISE_GROSS_SCHEME"].includes(cashMode);
+    if (isBillWiseCash && changedField === "cdAmt") {
+      // A directly entered amount replaces the shared bill percentage.
+      rows.forEach((row) => { row.cdPct = ""; });
+    } else if (isBillWiseCash && changedField === "cdPct" && changedIndex >= 0 && String(rows[changedIndex]?.cdPct ?? "").trim() === "") {
+      rows.forEach((row) => { row.cdPct = ""; row.cdAmt = ""; });
+    }
 
     /*
     * Recalculate Scheme and Star amounts first.
@@ -21298,6 +21336,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     * Every row keeps its own CD percentage.
     */
     if (
+      !rows.some((row) => String(row.cdPct ?? "").trim() !== "") ||
       cashMode ===
       "ITEM_WISE_GROSS" ||
       cashMode ===
@@ -21892,6 +21931,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       return;
     }
 
+    if (["schemePct", "schemeAmt", "cdPct", "cdAmt"].includes(field)) {
+      if (!/^\d*(?:\.\d{0,2})?$/.test(String(value))) return;
+      if (["schemePct", "cdPct"].includes(field) && Number(value) > 100) return;
+    }
+
 
     if (
       field === "rate" &&
@@ -22061,15 +22105,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               * Direct amount overrides percentage only in
               * item-wise modes.
               */
-              if (
-                [
-                  "ITEM_WISE_GROSS",
-                  "ITEM_WISE_GROSS_SCHEME",
-                ].includes(
-                  getInvoiceCashDiscountMode()
-                ) &&
-                String(value).trim() !== ""
-              ) {
+              if (String(value).trim() !== "") {
                 updatedItem.cdPct = "";
               }
             }
@@ -22215,6 +22251,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             changedField: field,
           }
         );
+
+      // Keep the active text exactly as typed, including an empty field or a
+      // trailing decimal point; calculation still uses its numeric value.
+      if (["schemeAmt", "cdAmt", "schemePct", "cdPct"].includes(field) && recalculatedItems[index]) {
+        recalculatedItems[index] = { ...recalculatedItems[index], [field]: value };
+      }
 
       calcInvoiceSummary(
         recalculatedItems
@@ -42092,7 +42134,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
   const chunkPrintLoadRows = (
     rows,
-    pageSize = 50
+    pageSize = 32
   ) => {
     const pages = [];
 
@@ -42107,6 +42149,82 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     return pages.length > 0 ? pages : [[]];
   };
 
+  /*
+   * A portrait A4 sheet cannot show every optional load column at a readable
+   * size. Keep the row identifiers on every continuation sheet and split only
+   * the remaining selected columns. This preserves every selected value
+   * without browser "fit to page" shrinking the complete report.
+   */
+  const getPrintLoadColumnWeight = (columnKey) => {
+    const wideColumns = [
+      "productName",
+      "partyName",
+      "companyName",
+      "narration",
+      "remark",
+    ];
+    const mediumColumns = [
+      "productCode",
+      "shortCode",
+      "partyCode",
+      "gstNo",
+      "compInvNo",
+      "salesman",
+      "billAmount",
+      "netAmount",
+      "discount",
+      "pending",
+    ];
+
+    if (wideColumns.includes(columnKey)) return 24;
+    if (mediumColumns.includes(columnKey)) return 14;
+    if (["srNo", "mrp", "qty", "unitQty", "totalQty", "weight"].includes(columnKey)) return 9;
+    return 12;
+  };
+
+  const getPrintLoadColumnGroups = (columns, reportLevel) => {
+    if (columns.length <= 1) return [columns];
+
+    const identityKeys = reportLevel === "party_wise"
+      ? ["srNo", "billNo", "partyName"]
+      : ["srNo", "productCode", "productName"];
+    const identityColumns = columns.filter((column) =>
+      identityKeys.includes(column.key)
+    );
+    const remainingColumns = columns.filter(
+      (column) => !identityKeys.includes(column.key)
+    );
+    const identityWeight = identityColumns.reduce(
+      (total, column) => total + getPrintLoadColumnWeight(column.key),
+      0
+    );
+    const maximumWeight = 92;
+    const groups = [];
+    let currentColumns = [...identityColumns];
+    let currentWeight = identityWeight;
+
+    remainingColumns.forEach((column) => {
+      const columnWeight = getPrintLoadColumnWeight(column.key);
+      if (
+        currentColumns.length > identityColumns.length &&
+        currentWeight + columnWeight > maximumWeight
+      ) {
+        groups.push(currentColumns);
+        currentColumns = [...identityColumns];
+        currentWeight = identityWeight;
+      }
+
+      currentColumns.push(column);
+      currentWeight += columnWeight;
+    });
+
+    if (currentColumns.length > identityColumns.length || groups.length === 0) {
+      groups.push(currentColumns);
+    }
+
+    return groups;
+  };
+
   const selectedPrintLoadColumnOptions =
     getActivePrintLoadColumnOptions().filter(
       (column) =>
@@ -42114,10 +42232,23 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           column.key
         )
     );
-  const PRINT_LOAD_ROWS_PER_PAGE = 50;
+  const PRINT_LOAD_ROWS_PER_PAGE = 32;
+  const printLoadColumnGroups = getPrintLoadColumnGroups(
+    selectedPrintLoadColumnOptions,
+    printLoadFormData.reportLevel
+  );
   const printLoadPages = chunkPrintLoadRows(
     printLoadItems,
-    50
+    PRINT_LOAD_ROWS_PER_PAGE
+  ).flatMap((rows, rowPageIndex) =>
+    printLoadColumnGroups.map((columns, columnGroupIndex) => ({
+      rows,
+      columns,
+      rowOffset: rowPageIndex * PRINT_LOAD_ROWS_PER_PAGE,
+      rowPageIndex,
+      columnGroupIndex,
+      columnGroupCount: printLoadColumnGroups.length,
+    }))
   );
 
   const printLoadHeader =
@@ -42218,14 +42349,15 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           <head>
             <title>Print Load</title>
             <style>
-              @page { size: A4 landscape; margin: 6mm; }
+              @page { size: A4 portrait; margin: 8mm; }
               * { box-sizing: border-box; }
-              body { margin: 0; color: #000; font: 8px Arial, sans-serif; }
-              .print-load-document-page { width: 100%; break-after: page; }
+              html, body { width: 194mm; margin: 0; padding: 0; }
+              body { color: #000; font: 10pt Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .print-load-document-page { width: 194mm; min-height: 281mm; break-after: page; }
               .print-load-document-page:last-child { break-after: auto; }
-              .print-load-document-header h1 { font-size: 12px; margin: 0 0 4px; }
-              .print-load-document-details { line-height: 1.25; margin-bottom: 5px; }
-              .print-load-header-gap { margin-left: 8px; }
+              .print-load-document-header h1 { font-size: 14pt; margin: 0 0 3mm; }
+              .print-load-document-details { font-size: 9.5pt; line-height: 1.35; margin-bottom: 4mm; }
+              .print-load-header-gap { margin-left: 6mm; }
               .print-load-document-table-wrap { width: 100%; }
               table {
                 width: 100%;
@@ -42234,15 +42366,20 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
               }
               th, td {
                 border: 1px solid #555;
-                padding: 2px 1px;
-                font-size: 7px;
-                line-height: 1.1;
+                padding: 1.1mm 0.8mm;
+                font-size: 9pt;
+                line-height: 1.2;
                 overflow-wrap: anywhere;
                 word-break: break-word;
                 vertical-align: top;
               }
-              th { background: #eee; color: #000; text-align: left; }
+              th { background: #eee; color: #000; font-size: 9pt; font-weight: 700; text-align: left; }
+              .print-load-col-productName, .print-load-col-partyName { width: 30%; }
+              .print-load-col-companyName, .print-load-col-narration, .print-load-col-remark { width: 24%; }
+              .print-load-col-productCode, .print-load-col-shortCode, .print-load-col-partyCode, .print-load-col-gstNo, .print-load-col-compInvNo, .print-load-col-salesman { width: 15%; }
+              .print-load-col-srNo { width: 7%; }
               .number-cell, .print-load-document-total-label { text-align: right; }
+              .print-load-document-total-label, .print-load-document-total-value { font-weight: 700; }
               tr { break-inside: avoid; }
               @media print {
                 body {
@@ -43925,11 +44062,14 @@ else if (item === 'Import Data From Desktop') {
       });
     }
     else if (item === 'Print Load') {
+      // Reopen with the user's saved columns and options. Resetting this form
+      // previously discarded the saved selections on every visit.
       setPrintLoadFormData({
+        ...getSavedPrintLoadSettings(),
         loadSeries: '',
         loadNo: '',
-        reportLevel: 'product_wise',
-        printLayout: 'portrait'
+        loadDate: businessDateIST(),
+        printLayout: 'portrait',
       });
       setPrintLoadItems([]);
       setShowPrintPreview(false);
@@ -66416,6 +66556,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         className="billing-table-control billing-numeric-control"
                                         data-field="schemeAmt"
                                         data-index={index}
+                                        onFocus={(event) => event.target.select()}
                                         value={
                                           item.schemeAmt || ""
                                         }
@@ -66468,6 +66609,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         className="billing-table-control billing-numeric-control"
                                         data-field="cdAmt"
                                         data-index={index}
+                                        onFocus={(event) => event.target.select()}
                                         value={item.cdAmt || ""}
                                         onChange={(event) =>
                                           updateInvoiceItem(
@@ -68813,10 +68955,27 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               className="print-load-document-wrapper"
                             >
                               {printLoadPages.map(
-                                (pageRows, pageIndex) => {
-                                  const isLastPage =
-                                    pageIndex ===
-                                    printLoadPages.length - 1;
+                                (page, pageIndex) => {
+                                  const pageRows = page.rows;
+                                  const pageColumns = page.columns;
+                                  const isFinalRowPage =
+                                    page.rowPageIndex ===
+                                    Math.max(
+                                      0,
+                                      Math.ceil(
+                                        printLoadItems.length /
+                                        PRINT_LOAD_ROWS_PER_PAGE
+                                      ) - 1
+                                    );
+                                  const totalColumnKey =
+                                    printLoadFormData.reportLevel === "party_wise"
+                                      ? "billAmount"
+                                      : "netAmount";
+                                  const totalColumnIndex =
+                                    pageColumns.findIndex(
+                                      (column) =>
+                                        column.key === totalColumnKey
+                                    );
 
                                   return (
                                     <section
@@ -68843,6 +69002,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               "party_wise"
                                               ? "Party Wise"
                                               : "Product Wise"}
+                                            {page.columnGroupCount > 1 && (
+                                              <>
+                                                {" "}• Columns {page.columnGroupIndex + 1}/
+                                                {page.columnGroupCount}
+                                              </>
+                                            )}
                                           </div>
 
                                           <div>
@@ -68914,19 +69079,27 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   ===================================== */}
                                       <div className="print-load-document-table-wrap">
                                         <table className="print-load-document-table">
+                                          <colgroup>
+                                            {pageColumns.map((column) => (
+                                              <col
+                                                key={column.key}
+                                                className={`print-load-col-${column.key}`}
+                                              />
+                                            ))}
+                                          </colgroup>
                                           <thead>
                                             <tr>
-                                              {selectedPrintLoadColumnOptions.map(
+                                              {pageColumns.map(
                                                 (column) => (
                                                   <th
                                                     key={column.key}
-                                                    className={
+                                                    className={`print-load-col-${column.key}${
                                                       isPrintLoadNumericColumn(
                                                         column.key
                                                       )
-                                                        ? "number-cell"
+                                                        ? " number-cell"
                                                         : ""
-                                                    }
+                                                    }`}
                                                   >
                                                     {column.label}
                                                   </th>
@@ -68939,7 +69112,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                             {pageRows.length > 0 ? (
                                               pageRows.map((row, pageRowIndex) => {
                                                 const actualRowIndex =
-                                                  pageIndex * PRINT_LOAD_ROWS_PER_PAGE +
+                                                  page.rowOffset +
                                                   pageRowIndex;
 
                                                 return (
@@ -68947,20 +69120,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                                     key={
                                                       row._id ||
                                                       row.id ||
-                                                      `${pageIndex}-${pageRowIndex}`
+                                                      `${pageIndex}-${page.columnGroupIndex}-${pageRowIndex}`
                                                     }
                                                   >
-                                                    {selectedPrintLoadColumnOptions.map(
+                                                    {pageColumns.map(
                                                       (column) => (
                                                         <td
                                                           key={`${column.key}-${actualRowIndex}`}
-                                                          className={
+                                                          className={`print-load-col-${column.key}${
                                                             isPrintLoadNumericColumn(
                                                               column.key
                                                             )
-                                                              ? "number-cell"
+                                                              ? " number-cell"
                                                               : ""
-                                                          }
+                                                          }`}
                                                         >
                                                           {getPrintLoadCellValue(
                                                             row,
@@ -68977,7 +69150,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               <tr>
                                                 <td
                                                   colSpan={Math.max(
-                                                    selectedPrintLoadColumnOptions.length,
+                                                    pageColumns.length,
                                                     1
                                                   )}
                                                   className="print-load-empty-row"
@@ -68988,31 +69161,48 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                             )}
                                           </tbody>
 
-                                          {isLastPage &&
-                                            selectedPrintLoadColumnOptions.length >
-                                            0 && (
+                                          {isFinalRowPage &&
+                                            totalColumnIndex >= 0 && (
                                               <tfoot>
                                                 <tr>
-                                                  <td
-                                                    colSpan={Math.max(
-                                                      selectedPrintLoadColumnOptions.length -
-                                                      1,
-                                                      1
-                                                    )}
-                                                    className="print-load-document-total-label"
-                                                  >
-                                                    Total
-                                                  </td>
+                                                  {pageColumns.map(
+                                                    (column, columnIndex) => {
+                                                      if (columnIndex === 0) {
+                                                        return (
+                                                          <td
+                                                            key="total-label"
+                                                            colSpan={Math.max(
+                                                              totalColumnIndex,
+                                                              1
+                                                            )}
+                                                            className="print-load-document-total-label"
+                                                          >
+                                                            Total
+                                                          </td>
+                                                        );
+                                                      }
 
-                                                  {selectedPrintLoadColumnOptions.length >
-                                                    1 && (
-                                                      <td className="number-cell print-load-document-total-value">
-                                                        {formatPrintLoadNumber(
-                                                          printLoadTotalAmount,
-                                                          2
-                                                        )}
-                                                      </td>
-                                                    )}
+                                                      if (columnIndex < totalColumnIndex) {
+                                                        return null;
+                                                      }
+
+                                                      if (columnIndex === totalColumnIndex) {
+                                                        return (
+                                                          <td
+                                                            key={column.key}
+                                                            className="number-cell print-load-document-total-value"
+                                                          >
+                                                            {formatPrintLoadNumber(
+                                                              printLoadTotalAmount,
+                                                              2
+                                                            )}
+                                                          </td>
+                                                        );
+                                                      }
+
+                                                      return <td key={column.key} />;
+                                                    }
+                                                  )}
                                                 </tr>
                                               </tfoot>
                                             )}
@@ -70277,8 +70467,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     ))}
                     </div></section>
                     <section className="invoice-print-group"><h2><Settings aria-hidden="true" />Print Settings</h2><div className="invoice-print-group-body">
-                    <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-report">Report No.</label></div><select id="invoice-setup-report" className="gs-single-control" value={salesPrintOptions.reportNumber || "1"} disabled={printAccountDetailsSaving} onChange={(event) => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, reportNumber: event.target.value })); }}>{SALES_BILL_REPORT_NUMBERS.map((report) => <option key={report.value} value={report.value}>{report.label}</option>)}</select></div>
-                    <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-paper">Paper Size</label></div><select id="invoice-setup-paper" className="gs-single-control" value={salesPrintOptions.paperSize || "A4"} disabled={printAccountDetailsSaving} onChange={(event) => { const paper = SALES_BILL_PAPER_SIZES.find((item) => item.value === event.target.value) || SALES_BILL_PAPER_SIZES[0]; setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, paperSize: paper.value, orientation: paper.orientation })); }}>{SALES_BILL_PAPER_SIZES.map((paper) => <option key={paper.value} value={paper.value}>{paper.label}</option>)}</select></div>
+                    <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-report">Invoice Format</label></div><select id="invoice-setup-report" className="gs-single-control" value={salesPrintOptions.reportNumber || "1"} disabled={printAccountDetailsSaving} onChange={(event) => { const reportNumber = event.target.value; setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, reportNumber, ...(reportNumber === "unique_a5" ? { paperSize: "A5", orientation: "landscape" } : {}) })); }}>{SALES_BILL_REPORT_NUMBERS.map((report) => <option key={report.value} value={report.value}>{report.label}</option>)}</select></div>
+                    <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-paper">Paper Size</label></div><select id="invoice-setup-paper" className="gs-single-control" value={salesPrintOptions.paperSize || "A4"} disabled={printAccountDetailsSaving || salesPrintOptions.reportNumber === "unique_a5"} onChange={(event) => { const paper = SALES_BILL_PAPER_SIZES.find((item) => item.value === event.target.value) || SALES_BILL_PAPER_SIZES[0]; setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, paperSize: paper.value, orientation: paper.orientation })); }}>{SALES_BILL_PAPER_SIZES.map((paper) => <option key={paper.value} value={paper.value}>{paper.label}</option>)}</select></div>
                     <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-copies">No. of Copies</label></div><input id="invoice-setup-copies" className="gs-single-control" type="number" min="1" max="10" step="1" value={salesPrintOptions.copies || 1} disabled={printAccountDetailsSaving} onChange={(event) => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, copies: event.target.value })); }} /></div>
                     <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-font">Invoice Font Size (%)</label></div><input id="invoice-setup-font" className="gs-single-control" type="number" min="80" max="150" step="5" value={salesPrintOptions.fontSizePercent || 150} disabled={printAccountDetailsSaving} onChange={(event) => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, fontSizePercent: Math.min(150, Math.max(80, Number(event.target.value) || 150)) })); }} /></div>
                     </div></section>
@@ -77389,6 +77579,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       <input
                                         type="text"
                                         inputMode="decimal"
+                                        onFocus={(event) => event.target.select()}
                                         value={item.schemeAmt || ""}
                                         onChange={(event) =>
                                           updateInvoiceItem(
@@ -77430,6 +77621,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         className="billing-table-control billing-numeric-control"
                                         data-field="cdAmt"
                                         data-index={index}
+                                        onFocus={(event) => event.target.select()}
                                         value={item.cdAmt}
                                         onChange={(event) =>
                                           updateInvoiceItem(
