@@ -20837,13 +20837,13 @@ body
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  min-width: 1122px;
+  min-width: 794px;
 }
 
 .print-load-document-page {
-  width: 1122px;
-  min-height: 794px;
-  padding: 30px 34px;
+  width: 794px;
+  min-height: 1123px;
+  padding: 30px;
   box-sizing: border-box;
   background: #ffffff;
   color: #000000;
@@ -20889,56 +20889,33 @@ body
   table-layout: fixed;
   color: #000000;
   font-size: 12px;
+  font-family: "Arial Narrow", Arial, sans-serif;
 }
 
 .print-load-document-table th {
-  padding: 6px 4px;
+  padding: .8mm .5mm;
   border: 1px solid #666666;
-  background: #ffffff;
+  background: #eee;
   color: #000000;
   font-size: var(--load-table-font, 8pt);
   font-weight: 700;
   line-height: 1.1;
   text-align: left;
-  vertical-align: middle;
+  vertical-align: top;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
 .print-load-document-table td {
   min-height: 22px;
-  padding: 5px 4px;
+  padding: .8mm .5mm;
   border: 1px solid #888888;
   color: #000000;
   font-size: var(--load-table-font, 8pt);
   line-height: 1.2;
-  vertical-align: middle;
+  vertical-align: top;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-
-.print-load-document-table .print-load-col-productName,
-.print-load-document-table .print-load-col-partyName {
-  width: 30%;
-}
-
-.print-load-document-table .print-load-col-companyName,
-.print-load-document-table .print-load-col-narration,
-.print-load-document-table .print-load-col-remark {
-  width: 24%;
-}
-
-.print-load-document-table .print-load-col-productCode,
-.print-load-document-table .print-load-col-shortCode,
-.print-load-document-table .print-load-col-partyCode,
-.print-load-document-table .print-load-col-gstNo,
-.print-load-document-table .print-load-col-compInvNo,
-.print-load-document-table .print-load-col-salesman {
-  width: 15%;
-}
-
-.print-load-document-table .print-load-col-srNo {
-  width: 7%;
 }
 
 .print-load-document-table .number-cell {
@@ -20952,7 +20929,7 @@ body
 
 .print-load-document-table tfoot td {
   padding: 4px 3px;
-  font-size: 8.5px;
+  font-size: var(--load-table-font, 8pt);
   font-weight: 700;
 }
 
@@ -20975,7 +20952,7 @@ body
 
 @media print {
   @page print-load {
-    size: A4 landscape;
+    size: A4 portrait;
     margin: 8mm;
   }
 
@@ -21023,8 +21000,8 @@ body
 
   .print-load-document-page {
     page: print-load;
-    width: 281mm !important;
-    min-height: 194mm !important;
+    width: 194mm !important;
+    min-height: 281mm !important;
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
@@ -21043,13 +21020,13 @@ body
   }
 
   .print-load-document-table th {
-    padding: 1.1mm .8mm !important;
+    padding: .8mm .5mm !important;
     font-size: var(--load-table-font, 8pt) !important;
   }
 
   .print-load-document-table td {
     min-height: 5.5mm !important;
-    padding: 1.1mm .8mm !important;
+    padding: .8mm .5mm !important;
     font-size: var(--load-table-font, 8pt) !important;
   }
 }

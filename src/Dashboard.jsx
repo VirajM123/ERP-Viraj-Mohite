@@ -6098,7 +6098,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               max-height: none;
               padding: 2mm 3mm;
               overflow: visible;
-              font: 8px/1.16 "Courier New", monospace;
+              font: 11px/1.16 "Courier New", monospace;
             }
             .invoice-report-unique_a5, .invoice-report-unique_a5 * {
               font-family: "Courier New", monospace !important;
@@ -6109,10 +6109,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               border: 0;
             }
             .unique-firm { padding: 0 2mm 0 0; }
-            .unique-firm > strong { font-size: 11px; margin-bottom: .4mm; }
+            .unique-firm > strong { font-size: 13px; margin-bottom: .4mm; }
             .unique-meta { padding: 0 0 0 1mm; border: 0; }
-            .unique-meta > strong { font-size: 12px; letter-spacing: 0; text-align: left; margin-bottom: 1mm; }
-            .unique-meta > div { grid-template-columns: 20mm 2mm 1fr; min-height: 2.7mm; gap: .4mm; }
+            .unique-meta > strong { font-size: 14px; letter-spacing: 0; text-align: left; margin-bottom: 1mm; }
+            .unique-meta > div { grid-template-columns: 24mm 2mm 1fr; min-height: 3.1mm; gap: .4mm; }
             .unique-firm-gstin {
               border-top: .2mm dashed #000;
               text-align: center;
@@ -6127,18 +6127,17 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               padding: .3mm 0 0;
               border: 0;
             }
-            .unique-party-card { font-size: 8px; line-height: 1.15; }
-            .unique-party-card > strong { font-size: 8px; margin: 0; }
+            .unique-party-card { font-size: 11px; line-height: 1.15; }
+            .unique-party-card > strong { font-size: 11px; margin: 0; }
             .unique-party-qr { display: flex; align-items: center; justify-content: center; }
             .unique-party-qr img { width: 24mm; height: 24mm; object-fit: contain; }
             .unique-salesman { text-align: center; min-height: 3mm; }
-            .unique-items { flex: 1 0 34mm; overflow: visible; border-top: .2mm solid #000; }
+            .unique-items { flex: 1 0 25mm; overflow: visible; border-top: .2mm solid #000; }
             .unique-items th, .unique-items td {
               height: auto;
               padding: .4mm .15mm;
               border: 0;
-              font-size: 7.2px;
-              line-height: 1.13;
+              font: 11px/1.13 "Arial Narrow", Arial, sans-serif !important;
               vertical-align: top;
               overflow: visible;
               white-space: normal;
@@ -6156,7 +6155,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               min-height: 37mm;
               padding: 0;
               border: 0;
-              font-size: 8px;
+              font-size: 11px;
               line-height: 1.15;
             }
             .unique-discounts {
@@ -6168,7 +6167,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               padding: .6mm 0;
               border-top: .2mm solid #000;
               border-bottom: .2mm solid #000;
-              font-size: 7.5px;
+              flex-wrap: wrap;
+              font-size: 10px;
             }
             .unique-discounts span { white-space: nowrap; }
             .unique-bank { grid-column: 1 / -1; grid-row: 2; margin: .5mm 0; overflow-wrap: anywhere; }
@@ -6180,8 +6180,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .unique-totals { grid-column: 2; grid-row: 3; padding: 0; border: 0; }
             .unique-totals > div { grid-template-columns: minmax(0, 1fr) 24mm; min-height: 2.7mm; gap: .5mm; }
             .unique-totals > div > :last-child { text-align: right; white-space: nowrap; }
-            .unique-net-total { margin-top: .4mm; padding: 0; border: 0; font-size: 9px; }
-            .unique-gst-note { grid-column: 1 / -1; grid-row: 4; margin-top: 1mm; text-align: center; font: 9px Arial, sans-serif !important; }
+            .unique-net-total { margin-top: .4mm; padding: 0; border: 0; font-size: 12px; }
+            .unique-gst-note { grid-column: 1 / -1; grid-row: 4; margin-top: 1mm; text-align: center; font: 11px Arial, sans-serif !important; }
 
             @media print {
               html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
@@ -6285,15 +6285,15 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     ========================================================= */
 
   const productWiseColumnOptions = [
+    { key: "productCode", label: "Product Code", required: true },
     { key: "productName", label: "Product Name", required: true },
     { key: "mrp", label: "MRP" },
-    { key: "unitQty", label: "Unit Qty" },
-    { key: "qty", label: "Qty" },
     { key: "cases", label: "Case" },
+    { key: "unitQty", label: "Unit Qty" },
     { key: "totalQty", label: "Total Qty", required: true },
+    { key: "qty", label: "Qty" },
     { key: "srNo", label: "SrNo" },
     { key: "shortCode", label: "Short Code" },
-    { key: "productCode", label: "Prod Code" },
     { key: "discount", label: "Discount" },
     { key: "netAmount", label: "Net Amt" },
     { key: "weight", label: "Kg" },
@@ -6323,7 +6323,16 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   ];
 
   const defaultProductWiseColumns =
-    ["productName", "mrp", "unitQty", "qty", "cases", "totalQty"];
+    ["productCode", "productName", "mrp", "cases", "unitQty", "totalQty"];
+
+  const normalizeProductWisePrintColumns = (columns) => {
+    if (!Array.isArray(columns) || columns.length === 0) return [...defaultProductWiseColumns];
+    const previousDefaults = ["productName", "mrp", "unitQty", "qty", "cases", "totalQty"];
+    if (columns.length === previousDefaults.length && previousDefaults.every((key) => columns.includes(key))) {
+      return [...defaultProductWiseColumns];
+    }
+    return [...new Set(["productCode", ...columns])];
+  };
 
   const defaultPartyWiseColumns =
     ["billSeries", "billNo", "billDate", "partyName", "billAmount", "cash", "cheque", "upi", "pending", "areaName", "salesman"];
@@ -8640,13 +8649,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           parsedValue.sortDirection ||
           defaults.sortDirection,
 
-        productWiseSelectedColumns:
-          Array.isArray(
-            parsedValue.productWiseSelectedColumns
-          ) &&
-            parsedValue.productWiseSelectedColumns.length > 0
-            ? parsedValue.productWiseSelectedColumns
-            : defaults.productWiseSelectedColumns,
+        productWiseSelectedColumns: normalizeProductWisePrintColumns(parsedValue.productWiseSelectedColumns),
 
         partyWiseSelectedColumns:
           Array.isArray(
@@ -8709,7 +8712,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         const saved = result.settings;
         setPrintLoadFormData((previous) => ({
           ...previous,
-          productWiseSelectedColumns: saved?.productWiseSelectedColumns?.length ? saved.productWiseSelectedColumns : defaultProductWiseColumns,
+          productWiseSelectedColumns: normalizeProductWisePrintColumns(saved?.productWiseSelectedColumns),
           partyWiseSelectedColumns: saved?.partyWiseSelectedColumns?.length ? saved.partyWiseSelectedColumns : defaultPartyWiseColumns,
         }));
       })
@@ -42616,7 +42619,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     return pages.length > 0 ? pages : [[]];
   };
 
-  /* Share the landscape sheet between all selected columns. */
+  /* Share the portrait sheet between all selected columns. */
   const getPrintLoadColumnWeight = (columnKey) => {
     const wideColumns = [
       "productName",
@@ -42765,11 +42768,11 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           <head>
             <title>Print Load</title>
             <style>
-              @page { size: A4 landscape; margin: 8mm; }
+              @page { size: A4 portrait; margin: 8mm; }
               * { box-sizing: border-box; }
-              html, body { width: 281mm; margin: 0; padding: 0; }
+              html, body { width: 194mm; margin: 0; padding: 0; }
               body { color: #000; font: 10pt Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .print-load-document-page { width: 281mm; min-height: 194mm; break-after: page; }
+              .print-load-document-page { width: 194mm; min-height: 281mm; break-after: page; }
               .print-load-document-page:last-child { break-after: auto; }
               .print-load-document-header h1 { font-size: 14pt; margin: 0 0 3mm; }
               .print-load-document-details { font-size: 9.5pt; line-height: 1.35; margin-bottom: 4mm; }
@@ -42779,6 +42782,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
                 width: 100%;
                 table-layout: fixed;
                 border-collapse: collapse;
+                font-family: "Arial Narrow", Arial, sans-serif;
               }
               th, td {
                 border: 1px solid #555;
@@ -69496,7 +69500,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   COMPACT TABLE
                                   ===================================== */}
                                       <div className="print-load-document-table-wrap">
-                                        <table className="print-load-document-table" style={{ "--load-table-font": pageColumns.length > 16 ? "6.5pt" : pageColumns.length > 12 ? "7.25pt" : "8.5pt" }}>
+                                        <table className="print-load-document-table" style={{ "--load-table-font": printLoadFormData.reportLevel === "product_wise" && pageColumns.length <= 6 ? "10pt" : pageColumns.length > 16 ? "6.5pt" : pageColumns.length > 12 ? "7.25pt" : "8.5pt" }}>
                                           <colgroup>
                                             {pageColumns.map((column) => (
                                               <col
