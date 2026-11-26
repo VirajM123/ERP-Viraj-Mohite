@@ -15,6 +15,37 @@ import createP0FeaturesRouter, {
   validateJournalLines,
 } from "../p0Features.js";
 import { Journal } from "../accounting.js";
+import mongoose from "mongoose";
+import { OpeningTransaction } from "../openingBalances.js";
+
+test("billing customer details are tenant-scoped and include remaining sales and opening balances", async () => {
+  const previousAccount = mongoose.models.Mas_Account;
+  const previousSales = mongoose.models.T_Sal_Header;
+  const previousOpeningFind = OpeningTransaction.find;
+  let accountFilter, salesFilter, openingFilter;
+  try {
+    mongoose.models.Mas_Account = { findOne(filter) { accountFilter = filter; return { select() { return { lean: async () => ({ accountCode: 'C1', accountName: 'Balaji', address: 'Pune', gstNo: 'GST1' }) }; } }; } };
+    mongoose.models.T_Sal_Header = { aggregate(pipeline) { salesFilter = pipeline[0].$match; return Promise.resolve([{ outstanding: 125 }]); } };
+    OpeningTransaction.find = (filter) => { openingFilter = filter; return { session() { return { lean: async () => [{ balanceAmount: 100, allocatedAmount: 30 }] }; } }; };
+    const router = createP0FeaturesRouter({ authorizeRequest: () => (_req, _res, next) => next() });
+    const route = router.stack.find((layer) => layer.route?.path === '/sales/customer-details').route;
+    const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
+    await route.stack[route.stack.length - 1].handle({ auth: { distributorId: 'D1', firmId: 'F1' }, query: { accountCode: 'C1' } }, res);
+    assert.equal(res.body.outstanding, 195);
+    assert.equal(res.body.customer.gstNo, 'GST1');
+    for (const filter of [accountFilter, salesFilter, openingFilter]) {
+      assert.equal(filter.distributorId, 'D1');
+      assert.equal(filter.firmId, 'F1');
+    }
+    assert.equal(salesFilter.PartyCode, 'C1');
+    assert.equal(openingFilter.accountCode, 'C1');
+    assert.deepEqual(salesFilter.IsBillCancelled, { $ne: true });
+  } finally {
+    if (previousAccount) mongoose.models.Mas_Account = previousAccount; else delete mongoose.models.Mas_Account;
+    if (previousSales) mongoose.models.T_Sal_Header = previousSales; else delete mongoose.models.T_Sal_Header;
+    OpeningTransaction.find = previousOpeningFind;
+  }
+});
 
 test("overdue bills do not block customers without a configured credit-days limit", () => {
   assert.equal(isCreditDaysOverdue(0, true), false);

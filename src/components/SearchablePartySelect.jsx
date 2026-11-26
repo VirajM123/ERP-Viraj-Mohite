@@ -6,10 +6,10 @@ const optionText = (children) => React.Children.toArray(children).map((child) =>
     React.isValidElement(child) ? optionText(child.props.children) : ""
 ).join("").replace(/\s+/g, " ").trim();
 
-export default function SearchablePartySelect({ children, value = "", onChange, className = "", placeholder, disabled, name, id, required, ...inputProps }) {
+export default function SearchablePartySelect({ children, value = "", onChange, className = "", placeholder, disabled, name, id, required, showOptionDetails = false, ...inputProps }) {
   const options = useMemo(() => React.Children.toArray(children).flatMap((child) =>
     Array.isArray(child) ? child : React.isValidElement(child) && child.type === "option" ? [child] : []
-  ).map((option) => ({ value: String(option.props.value ?? ""), label: optionText(option.props.children), disabled: option.props.disabled, style: option.props.style })), [children]);
+  ).map((option) => ({ value: String(option.props.value ?? ""), label: optionText(option.props.children), detail: option.props["data-detail"] || "", disabled: option.props.disabled, style: option.props.style })), [children]);
   const selected = options.find((option) => option.value === String(value ?? ""));
   const emptyOption = options.find((option) => option.value === "");
   const [query, setQuery] = useState("");
@@ -32,7 +32,7 @@ export default function SearchablePartySelect({ children, value = "", onChange, 
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
 
-  const matches = options.filter((option) => option.value && !option.disabled && (!filtering || option.label.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
+  const matches = options.filter((option) => option.value && !option.disabled && (!filtering || `${option.label} ${showOptionDetails ? `${option.value} ${option.detail}` : ""}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
   const choose = (option) => {
     setQuery(option.label);
     setFiltering(false);
@@ -104,7 +104,7 @@ export default function SearchablePartySelect({ children, value = "", onChange, 
         onMouseDown={(event) => event.preventDefault()}
         onMouseEnter={() => setActive(index)}
         onClick={() => choose(option)}
-      >{option.label}</button>) : <div className="searchable-party-empty">No matching parties</div>}
+      ><span>{option.label}</span>{showOptionDetails && option.detail && <small className="searchable-party-option-detail">{option.detail}</small>}</button>) : <div className="searchable-party-empty">No matching parties</div>}
     </div>}
   </div>;
 }

@@ -316,6 +316,37 @@ export const summarizeClassifiedRows = (rows, report) => {
 export default function createP0FeaturesRouter(securityRouter) {
   const router = express.Router();
 
+  // Billing customer details are scoped to the authenticated firm, and use
+  // the same open-sales and opening-balance basis as customer credit checks.
+  router.get('/sales/customer-details', securityRouter.authorizeRequest('SALES', 'SALES_BILLING', 'view'), async (req, res) => {
+    try {
+      const accountCode = String(req.query.accountCode || '').trim();
+      if (!accountCode || accountCode.length > 100) {
+        return res.status(400).json({ success: false, message: 'A valid customer code is required.' });
+      }
+      const Account = mongoose.models.Mas_Account;
+      const Sales = mongoose.models.T_Sal_Header;
+      const account = await Account.findOne(tenant(req, { accountCode, isActive: { $ne: false } }))
+        .select('accountCode accountName address add2 town state pinCode gstNo').lean();
+      if (!account) return res.status(404).json({ success: false, message: 'Customer not found.' });
+
+      const [salesExposure, openings] = await Promise.all([
+        Sales.aggregate([
+          { $match: tenant(req, { PartyCode: accountCode, isActive: { $ne: false }, IsBillCancelled: { $ne: true } }) },
+          { $group: { _id: null, outstanding: { $sum: { $max: [{ $subtract: [{ $ifNull: ['$NetAmount', 0] }, { $ifNull: ['$receiptAllocated', 0] }] }, 0] } } } },
+        ]),
+        openingOutstanding(req, 'Dr', null, accountCode),
+      ]);
+      const outstanding = number(salesExposure[0]?.outstanding) + openings.reduce(
+        (sum, row) => sum + Math.max(0, number(row.balanceAmount) - number(row.allocatedAmount)), 0
+      );
+      return res.json({ success: true, customer: account, outstanding: Math.round(outstanding * 100) / 100 });
+    } catch (error) {
+      console.error('Billing customer details error:', error);
+      return res.status(500).json({ success: false, message: 'Customer details could not be loaded.' });
+    }
+  });
+
   router.get('/reports/party-outstanding', securityRouter.authorizeRequest('REPORTS', 'OUTSTANDING_REPORT', 'view'), async (req, res) => {
     const account = String(req.query.account || '').trim();
     const accountPattern = account ? new RegExp(account.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), 'i') : null;

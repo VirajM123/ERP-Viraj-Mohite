@@ -52,6 +52,14 @@ const ImportDataFromDesktop = lazyWithFallback(() => import("./ImportDataFromDes
 
 const DEFAULT_INVOICE_TERMS = "1. Goods once sold will not be taken back or exchanged.\n2. Interest will be charged on overdue payments.\n3. Subject to local jurisdiction only.";
 
+const billingCustomerAddress = (account = {}) => [
+  account.address || account.address1 || account.Address1,
+  account.add2 || account.address2 || account.Address2,
+  account.town || account.Town || account.city,
+  account.state,
+  account.pinCode,
+].map((part) => String(part || "").trim()).filter(Boolean).join(", ");
+
 
 // Change this at the top of Dashboard.jsx:
 //import logo from "./assets/TotalSolution.ico";
@@ -8398,6 +8406,27 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     salesman: '',
     narration: ''
   });
+  const [billingCustomerDetails, setBillingCustomerDetails] = useState({ status: 'idle', code: '', customer: null, outstanding: null });
+  useEffect(() => {
+    const code = String(invoiceFormData.party || '').trim();
+    if (openFormFor !== 'Billing' || !code) {
+      setBillingCustomerDetails({ status: 'idle', code: '', customer: null, outstanding: null });
+      return undefined;
+    }
+    const controller = new AbortController();
+    setBillingCustomerDetails({ status: 'loading', code, customer: null, outstanding: null });
+    const params = new URLSearchParams({ accountCode: code });
+    secureFetch(`${API_URL}/p0/sales/customer-details?${params.toString()}`, { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || 'Customer details unavailable.');
+        if (!controller.signal.aborted) setBillingCustomerDetails({ status: 'ready', code, customer: result.customer, outstanding: result.outstanding });
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError' && !controller.signal.aborted) setBillingCustomerDetails({ status: 'error', code, customer: null, outstanding: null });
+      });
+    return () => controller.abort();
+  }, [invoiceFormData.party, openFormFor]);
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [invoiceSummary, setInvoiceSummary] = useState({
     gross: 0,
@@ -76529,6 +76558,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               id="billing-party"
                               name="party"
                               className="billing-control"
+                              showOptionDetails
                               value={invoiceFormData.party}
                               onChange={(event) => {
                                 const partyValue = event.target.value;
@@ -76552,6 +76582,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                               {invoicePartyOptions
                                 .map((mapping) => {
+                                  const account = accounts.find((item) =>
+                                    String(item.accountCode || item.code || '').trim() === String(mapping.accountCode || '').trim()
+                                  ) || mapping;
+                                  const address = billingCustomerAddress(account) || billingCustomerAddress(mapping);
                                   const isBlacklisted =
                                     mapping.blackListed === "YES" ||
                                     mapping.blackListed === "Y";
@@ -76560,6 +76594,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <option
                                       key={`${mapping.areaCode}-${mapping.accountCode}`}
                                       value={mapping.accountCode}
+                                      data-detail={[mapping.accountCode, address || 'Address not available'].filter(Boolean).join(' · ')}
                                       style={
                                         isBlacklisted
                                           ? {
@@ -76592,6 +76627,26 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               +
                             </button>
                           </div>
+
+                          {invoiceFormData.party && (() => {
+                            const code = String(invoiceFormData.party).trim();
+                            const localAccount = accounts.find((account) => String(account.accountCode || account.code || '').trim() === code)
+                              || invoicePartyOptions.find((mapping) => String(mapping.accountCode || '').trim() === code)
+                              || {};
+                            const currentDetails = billingCustomerDetails.code === code ? billingCustomerDetails : null;
+                            const account = currentDetails?.customer || localAccount;
+                            const address = billingCustomerAddress(account) || billingCustomerAddress(localAccount);
+                            const gstNo = account.gstNo || account.GSTNo || account.GstNo || localAccount.gstNo || '';
+                            return (
+                              <div className="billing-customer-details" aria-live="polite">
+                                <div><strong>Address:</strong> {address || 'Not available'}</div>
+                                <div><strong>GST No:</strong> {gstNo || 'Not available'}</div>
+                                <div><strong>Outstanding:</strong> {currentDetails?.status === 'ready'
+                                  ? `₹${Number(currentDetails.outstanding).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                  : currentDetails?.status === 'error' ? 'Unavailable' : 'Loading…'}</div>
+                              </div>
+                            );
+                          })()}
 
                           {invoiceFormData.party &&
                             (() => {

@@ -5,4 +5,5 @@
 .searchable-party-options { position: absolute; z-index: 1000; top: calc(100% + 3px); left: 0; right: 0; max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 24px rgba(15, 23, 42, .16); }
 .searchable-party-options > button { display: block; width: 100%; border: 0; border-radius: 0; background: #fff; color: #172554; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; }
 .searchable-party-options > button:hover, .searchable-party-options > button.active { background: #eaf2ff; }
+.searchable-party-option-detail { display: block; margin-top: 3px; color: #526579; font-size: 11px; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
 .searchable-party-empty { padding: 9px 10px; color: #64748b; }
