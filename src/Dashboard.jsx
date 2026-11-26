@@ -3870,8 +3870,15 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ? String(reportNumber)
       : "1";
 
-    const isA5 =
-      normalizedPaperSize === "A5";
+    // The Unique layout is a physical A5 landscape invoice by design.  Lock
+    // the print dimensions here as well as in setup so browser print settings
+    // cannot silently turn it into a scaled A4 document.
+    const isUniqueA5 = normalizedReportNumber === "unique_a5";
+    const isA5 = normalizedPaperSize === "A5" || isUniqueA5;
+    const printPaperSize = isUniqueA5 ? "A5" : normalizedPaperSize;
+    const printOrientation = isUniqueA5
+      ? "landscape"
+      : normalizedOrientation;
 
     const normalizedFontSizePercent = Math.min(
       150,
@@ -4250,6 +4257,74 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       readBillValue(["AreaName", "areaName"])
     );
 
+    /*
+     * The legacy A5 bill carries the delivery/consignee information on the
+     * invoice header.  A number of older sales rows do not have separate
+     * delivery fields, so each value deliberately falls back to the billed
+     * party.  This keeps old invoices printable while showing the saved
+     * consignee whenever it is available.
+     */
+    const consigneeName = readBillValue(
+      [
+        "ConsigneeName",
+        "consigneeName",
+        "ShipToName",
+        "shipToName",
+        "DeliveryPartyName",
+        "deliveryPartyName",
+      ],
+      partyName
+    );
+
+    const consigneeAddressLines = [
+      readBillValue(
+        [
+          "ConsigneeAddress",
+          "consigneeAddress",
+          "ConsigneeAddress1",
+          "consigneeAddress1",
+          "ShipToAddress",
+          "shipToAddress",
+          "DeliveryAddress",
+          "deliveryAddress",
+        ],
+        getInvoiceValue(party, ["address", "address1", "Address", "Address1"])
+      ),
+      readBillValue(
+        [
+          "ConsigneeAddress2",
+          "consigneeAddress2",
+          "ShipToAddress2",
+          "shipToAddress2",
+          "DeliveryAddress2",
+          "deliveryAddress2",
+        ],
+        getInvoiceValue(party, ["address2", "add2", "Address2"])
+      ),
+      [
+        readBillValue(
+          ["ConsigneeTown", "consigneeTown", "ShipToTown", "shipToTown", "DeliveryTown", "deliveryTown"],
+          getInvoiceValue(party, ["town", "city", "Town", "City"])
+        ),
+        readBillValue(
+          ["ConsigneePinCode", "consigneePinCode", "ShipToPinCode", "shipToPinCode", "DeliveryPinCode", "deliveryPinCode"],
+          getInvoiceValue(party, ["pinCode", "PinCode", "pin", "Pin"])
+        ),
+      ].filter(Boolean).join(" - "),
+    ];
+
+    const consigneeState = readBillValue(
+      ["ConsigneeState", "consigneeState", "ShipToState", "shipToState", "DeliveryState", "deliveryState"],
+      partyState
+    );
+    const consigneeStateCode = readBillValue(
+      ["ConsigneeStateCode", "consigneeStateCode", "ShipToStateCode", "shipToStateCode", "DeliveryStateCode", "deliveryStateCode"],
+      partyStateCode
+    );
+    const consigneeGstNo = readBillValue(
+      ["ConsigneeGSTNo", "consigneeGstNo", "ConsigneeGSTIN", "consigneeGstin", "ShipToGSTIN", "shipToGstin", "DeliveryGSTIN", "deliveryGstin"],
+      partyGstNo
+    );
     const hasSavedPrintAccount = Boolean(printAccountDetails);
 
     const bankName = hasSavedPrintAccount
@@ -4532,7 +4607,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     };
 
     const uniqueInvoice = (copyNumber) => {
-      const productsPerPage = 8;
+      const productsPerPage = 5;
+      const sourceItems = Array.isArray(bill.items) ? bill.items : (Array.isArray(bill.Items) ? bill.Items : []);
       const itemPages = Array.from(
         { length: Math.max(1, Math.ceil(visibleItems.length / productsPerPage)) },
         (_, pageIndex) => visibleItems.slice(pageIndex * productsPerPage, (pageIndex + 1) * productsPerPage)
@@ -4541,12 +4617,75 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         <main class="${pageClass}">
           ${copies > 1 ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>` : ""}
           <header class="unique-header">
-            <div><strong>${text(firmName)}</strong>${joinAddress(firmAddressLines)}<div>State: ${text(firmState)} &nbsp; Code: ${text(firmStateCode)}</div><div>Phone: ${text(firmPhone || firmMobile)}</div><div>GSTIN: ${text(firmGstNo)}</div></div>
-            <div class="unique-meta"><strong>TAX-INVOICE</strong><div>INVOICE NO: ${text(`${billSeries || ""}${billNo || ""}`)}</div><div>INVOICE DATE: ${text(formatInvoiceDate(billDate))}</div><div>Page ${pageIndex + 1} of ${itemPages.length}</div></div>
+            <section class="unique-firm">
+              <strong>${text(firmName)}</strong>
+              <div class="unique-address">${joinAddress(firmAddressLines)}</div>
+              <div>State : ${text(firmState)} &nbsp; State Code: ${text(firmStateCode)}</div>
+              <div>Ph : ${text([firmPhone, firmMobile].filter(Boolean).join(' / '))}</div>
+            </section>
+            <section class="unique-meta">
+              <strong>TAX-INVOICE</strong>
+              <div><span>INVOICE NO</span><span>:</span><span>${text(`${billSeries || ""}${billNo || ""}`)}</span></div>
+              <div><span>INVOICE DATE</span><span>:</span><span>${text(formatInvoiceDate(billDate))}</span></div>
+              <div><span>BEAT</span><span>:</span><span>${text(areaName)}</span></div>
+              ${itemPages.length > 1 ? `<div><span>PAGE</span><span>:</span><span>${pageIndex + 1} / ${itemPages.length}</span></div>` : ""}
+            </section>
           </header>
-          <section class="unique-party"><div><b>Details of Receiver (Billed to)</b><br><strong>${text(partyName)}</strong>${joinAddress(partyAddressLines)}<div>State: ${text(partyState)} / ${text(partyStateCode)}</div><div>GSTIN: ${text(partyGstNo)}</div></div><div><b>Details of Consignee (Shipped to)</b><br><strong>${text(partyName)}</strong>${joinAddress(partyAddressLines)}<div>State: ${text(partyState)} / ${text(partyStateCode)}</div><div>GSTIN: ${text(partyGstNo)}</div></div></section>
-          <section class="unique-items"><table><colgroup><col style="width:4%"><col style="width:25%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:7%"><col style="width:8%"><col style="width:8%"><col style="width:10%"><col style="width:7%"><col style="width:9%"></colgroup><thead><tr><th>Sr</th><th>Product Name</th><th>HSN</th><th>MRP</th><th>Qty</th><th>Rate</th><th>Sch</th><th>CD</th><th>Taxable</th><th>GST</th><th>Net Amt</th></tr></thead><tbody>${pageItems.map((item, index) => `<tr><td>${pageIndex * productsPerPage + index + 1}</td><td>${text(item.productName)}</td><td>${text(item.hsn)}</td><td>${money(item.mrp)}</td><td>${qty(item.qty)}</td><td>${money(item.rate)}</td><td>${money(item.schemeAmount)}</td><td>${money(item.cashDiscountAmount)}</td><td>${money(item.taxableAmount)}</td><td>${money(safeNumber(item.cgstAmount) + safeNumber(item.sgstAmount) + safeNumber(item.igstAmount))}</td><td>${money(item.netAmount)}</td></tr>`).join("")}</tbody></table></section>
-          ${pageIndex === itemPages.length - 1 ? `<footer class="unique-footer"><div><div><b>Amount in words:</b> ${text(amountInWords, "Zero Only")}</div>${showBankDetails && (bankName || bankAccountNo || bankIfsc) ? `<div><b>Bank:</b> ${text(bankName)} &nbsp; <b>A/C:</b> ${text(bankAccountNo)} &nbsp; <b>IFSC:</b> ${text(bankIfsc)}</div>` : ""}${showDeclaration ? `<div>${termsAndConditionsHtml}</div>` : ""}<div>Receiver's Stamp &amp; Sign</div><div>For ${text(firmName)}</div></div><div class="unique-totals"><div>Gross Amount <b>${money(grossAmount)}</b></div><div>Scheme <b>${money(schemeAmount)}</b></div><div>Cash Discount <b>${money(cashDiscountAmount)}</b></div><div>CGST <b>${money(cgstAmount)}</b></div><div>SGST <b>${money(sgstAmount)}</b></div><div>IGST <b>${money(igstAmount)}</b></div><div>Round Off <b>${money(roundingAmount)}</b></div><div><strong>NET AMOUNT</strong><strong>${money(netAmount)}</strong></div></div></footer>` : ""}
+          <div class="unique-firm-gstin">FIRM GSTIN ${text(firmGstNo)}</div>
+          <section class="unique-party">
+            <div class="unique-party-card">
+              <div>Details of Receiver (Billed to)</div>
+              <strong>${text(partyName)}</strong>
+              <div class="unique-address">${joinAddress(partyAddressLines)}</div>
+              <div>STATE: ${text(partyState)} &nbsp; STATE CODE:${text(partyStateCode)}</div>
+              <div><b>GSTIN/UNIQUE ID : ${text(partyGstNo)}</b></div>
+              <div>Phone: ${text(partyPhone || partyMobile)}</div>
+            </div>
+            <div class="unique-party-qr">${showBankDetails && bankQrCode ? `<img src="${escapeInvoiceHtml(bankQrCode)}" alt="Payment QR code">` : ""}</div>
+            <div class="unique-party-card">
+              <div>Details of Consignee (Shipped to)</div>
+              <strong>${text(consigneeName)}</strong>
+              <div class="unique-address">${joinAddress(consigneeAddressLines)}</div>
+              <div>STATE: ${text(consigneeState)} &nbsp; STATE CODE:${text(consigneeStateCode)}</div>
+              <div><b>GSTIN/UNIQUE ID : ${text(consigneeGstNo)}</b></div>
+            </div>
+          </section>
+          <div class="unique-salesman"><b>Salesman:</b> ${text(salesmanName)} ${text(salesmanMobile, "")}</div>
+          <section class="unique-items">
+            <table>
+              <colgroup>
+                <col style="width:3%"><col style="width:17%"><col style="width:7%"><col style="width:5%"><col style="width:5%"><col style="width:4%"><col style="width:4%"><col style="width:3%"><col style="width:5.5%"><col style="width:5.5%"><col style="width:5%"><col style="width:8%"><col style="width:4%"><col style="width:6%"><col style="width:6%"><col style="width:7%">
+              </colgroup>
+              <thead><tr><th>SR</th><th>Product Name</th><th>HSN</th><th>OldMrp</th><th>MRP</th><th>Unit</th><th>Qty</th><th>Fr.</th><th>Rate</th><th>Disc</th><th>CD</th><th>Taxable</th><th>GST%</th><th>CGST</th><th>SGST</th><th>Net Amt</th></tr></thead>
+              <tbody>${pageItems.map((item, index) => {
+                const oldMrp = getInvoiceValue(sourceItems[pageIndex * productsPerPage + index], ["oldMrp", "OldMrp", "OldMRP", "oldMRP"], "");
+                return `<tr><td>${pageIndex * productsPerPage + index + 1}</td><td class="unique-product">${text(item.productName)}</td><td>${text(item.hsn)}</td><td>${oldMrp === "" ? "-" : money(oldMrp)}</td><td>${money(item.mrp)}</td><td>${text(item.unit)}</td><td>${qty(item.qty)}</td><td>${qty(item.free)}</td><td>${money(item.rate)}</td><td>${money(item.schemeAmount)}</td><td>${money(item.cashDiscountAmount)}</td><td>${money(item.taxableAmount)}</td><td>${percent(safeNumber(item.igstPercent) > 0 ? safeNumber(item.igstPercent) : safeNumber(item.cgstPercent) + safeNumber(item.sgstPercent))}</td><td>${money(item.cgstAmount)}</td><td>${money(item.sgstAmount)}</td><td>${money(item.netAmount)}</td></tr>`;
+              }).join("")}</tbody>
+            </table>
+          </section>
+          ${pageIndex === itemPages.length - 1 ? `<footer class="unique-footer">
+            <div class="unique-discounts"><span><b>GROSS AMT :</b> ${money(grossAmount)}</span><span><b>SCHEME DISC :</b> ${money(schemeAmount)}</span><span><b>CASH DISC :</b> ${money(cashDiscountAmount)}</span><span><b>STAR DISC :</b> ${money(starDiscountAmount)}</span></div>
+            ${showBankDetails && (bankName || bankAccountNo || bankIfsc || bankBranch) ? `<div class="unique-bank">${text(bankName)} BANK ACC NO- ${text(bankAccountNo)}, IFSC CODE-${text(bankIfsc)}${bankBranch ? `, BRANCH - ${text(bankBranch)}` : ""}${bankAccountType ? `, AC TYPE - ${text(bankAccountType)}` : ""}</div>` : ""}
+            <div class="unique-footer-notes">
+              <div><b>Total Value (In Words) RS. ${text(amountInWords, "Zero Only")}</b></div>
+              ${showDeclaration ? `<div class="unique-declaration">${printAccountDetails?.termsAndConditions && printAccountDetails.termsAndConditions.trim() !== DEFAULT_INVOICE_TERMS ? termsAndConditionsHtml : "Declaration: Certified that the particulars given above are true<br>and correct and the amount indicated."}</div>` : ""}
+              <div class="unique-fssai"><b>FSSAI No : &nbsp; ${text(firmFoodLicence)}</b></div>
+              <div class="unique-signature"><strong>FOR ${text(firmName)}</strong><b>Receivers Stamp &amp; Sign.</b></div>
+              <div>Designation:</div>
+            </div>
+            <div class="unique-totals">
+              <div><b>TAXABLE AMT :</b><b>${money(taxableValue)}</b></div>
+              <div><span>Sch/Cash</span><span>${money(totalSchemeCash)}</span></div>
+              <div><span>CGST AMT</span><span>${money(cgstAmount)}</span></div>
+              <div><span>SGST AMT</span><span>${money(sgstAmount)}</span></div>
+              ${igstAmount !== 0 ? `<div><span>IGST AMT</span><span>${money(igstAmount)}</span></div>` : ""}
+              <div><span>CN/STAR/DIS:</span><span>${money(totalCnStarDis)}</span></div>
+              <div><span>ROUNDING :</span><span>${money(roundingAmount)}</span></div>
+              <div><span>TCS :</span><span>${money(tcsAmount)}</span></div>
+              <div class="unique-net-total"><strong>NET AMOUNT</strong><strong>${money(netAmount)}</strong></div>
+            </div>
+            <div class="unique-gst-note">Benefit of reduced GST rates to be passed to the end consumers</div>
+          </footer>` : ""}
         </main>`).join("");
     };
 
@@ -4865,7 +5004,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
           <style>
             @page {
-    size: ${normalizedPaperSize} ${normalizedReportNumber === "3" ? (isA5 ? "landscape" : "portrait") : normalizedOrientation};
+    size: ${printPaperSize} ${normalizedReportNumber === "3" ? (isA5 ? "landscape" : "portrait") : printOrientation};
     margin: ${isA5 ? "5mm" : "7mm"};
   }
 
@@ -5723,20 +5862,326 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .invoice-a5.invoice-report-1 .party-grid { min-height: 20mm; }
             .invoice-a5.invoice-report-1 .invoice-footer-summary-grid { min-height: 20mm; }
 
-            .invoice-report-unique_a5 { padding: 3mm 4mm; font: 10px/1.25 Arial, sans-serif; }
-            .invoice-report-unique_a5, .invoice-report-unique_a5 * { font-family: Arial, sans-serif; }
-            .unique-header { display: grid; grid-template-columns: 62% 38%; min-height: 25mm; border-bottom: 1px solid #000; }
-            .unique-header strong { font-size: 12px; }
-            .unique-meta { padding-left: 3mm; }
-            .unique-meta strong { display: block; margin-bottom: 2mm; font-size: 14px; }
-            .unique-party { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; padding: 1mm 0; border-bottom: 1px solid #000; }
-            .unique-items { min-height: 41mm; }
-            .unique-items table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-            .unique-items th, .unique-items td { padding: .5mm .3mm; border-bottom: 1px solid #777; overflow-wrap: anywhere; text-align: right; font-size: 9px; }
-            .unique-items th:nth-child(2), .unique-items td:nth-child(2) { text-align: left; }
-            .unique-footer { display: grid; grid-template-columns: 65% 35%; gap: 2mm; padding-top: 1mm; border-top: 1px solid #000; font-size: 9px; }
-            .unique-footer > div:first-child > div { margin-bottom: 1mm; }
-            .unique-totals > div { display: flex; justify-content: space-between; gap: 2mm; }
+            /*
+             * Unique A5 — matched to the distributor's landscape invoice.
+             * All physical measurements use mm so the preview and printed
+             * sheet use the same hierarchy, margins and readable body type.
+             */
+            .invoice-a5.invoice-report-unique_a5 {
+              display: grid;
+              grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+              width: 200mm;
+              height: 138mm;
+              min-height: 138mm;
+              max-height: 138mm;
+              padding: 3mm 4mm;
+              overflow: hidden;
+              font: 7.6px/1.18 Arial, Helvetica, sans-serif;
+              letter-spacing: 0;
+            }
+            .invoice-report-unique_a5,
+            .invoice-report-unique_a5 * {
+              font-family: "Arial Narrow", Arial, Helvetica, sans-serif !important;
+              color: #000;
+            }
+            .invoice-report-unique_a5 b,
+            .invoice-report-unique_a5 strong,
+            .invoice-report-unique_a5 th { font-weight: 700; }
+            .unique-header {
+              display: grid;
+              grid-template-columns: minmax(0, 62%) minmax(0, 38%);
+              min-height: 22mm;
+              border-bottom: .3mm solid #000;
+            }
+            .unique-firm { min-width: 0; padding: .4mm 2mm .9mm 0; }
+            .unique-firm > strong {
+              display: block;
+              margin-bottom: .45mm;
+              font-size: 10.5px;
+              line-height: 1.05;
+              text-transform: uppercase;
+            }
+            .unique-address { min-width: 0; line-height: 1.15; overflow-wrap: anywhere; }
+            .unique-inline {
+              display: flex;
+              flex-wrap: wrap;
+              gap: .35mm 2.2mm;
+              margin-top: .35mm;
+              line-height: 1.1;
+            }
+            .unique-meta {
+              min-width: 0;
+              padding: .35mm 0 .8mm 2mm;
+              border-left: .2mm solid #000;
+            }
+            .unique-meta > strong {
+              display: block;
+              margin-bottom: .55mm;
+              font-size: 11px;
+              line-height: 1.05;
+              letter-spacing: .25mm;
+              text-align: center;
+            }
+            .unique-meta > div {
+              display: grid;
+              grid-template-columns: 18mm 1.8mm minmax(0, 1fr);
+              min-height: 2.85mm;
+              align-items: baseline;
+              column-gap: .5mm;
+            }
+            .unique-meta em {
+              min-width: 0;
+              overflow-wrap: anywhere;
+              font-style: normal;
+              font-weight: 700;
+            }
+            .unique-party {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+              gap: 3mm;
+              min-height: 20mm;
+              padding: .8mm 0;
+              border-bottom: .2mm solid #000;
+            }
+            .unique-party-card { min-width: 0; line-height: 1.13; }
+            .unique-party-card > b {
+              display: block;
+              margin-bottom: .4mm;
+              padding-bottom: .35mm;
+              border-bottom: .2mm solid #000;
+              font-size: 7.8px;
+              text-transform: uppercase;
+            }
+            .unique-party-card > strong {
+              display: block;
+              margin-bottom: .3mm;
+              font-size: 8.4px;
+              line-height: 1.08;
+              text-transform: uppercase;
+            }
+            .unique-party-card > div { overflow-wrap: anywhere; }
+            .unique-route-meta {
+              display: grid;
+              grid-template-columns: 1.2fr 1fr 1.25fr 1.15fr;
+              align-items: center;
+              min-height: 4.5mm;
+              column-gap: 1.5mm;
+              padding: .45mm 0;
+              border-bottom: .3mm solid #000;
+              font-size: 7.25px;
+            }
+            .unique-route-meta span { min-width: 0; overflow-wrap: anywhere; }
+            .unique-items {
+              min-height: 0;
+              padding: 0;
+              overflow: hidden;
+            }
+            .unique-items table {
+              width: 100%;
+              border-spacing: 0;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+            .unique-items thead { display: table-header-group; }
+            .unique-items th,
+            .unique-items td {
+              padding: .45mm .2mm;
+              border-right: .15mm solid #555;
+              border-bottom: .15mm solid #555;
+              overflow: hidden;
+              text-align: right;
+              vertical-align: middle;
+              font-size: 6.75px;
+              line-height: 1.06;
+              font-variant-numeric: tabular-nums;
+              white-space: nowrap;
+            }
+            .unique-items th:last-child,
+            .unique-items td:last-child { border-right: 0; }
+            .unique-items th {
+              height: 5.9mm;
+              padding: .3mm .15mm;
+              border-top: 0;
+              border-bottom: .3mm solid #000;
+              text-align: center;
+              vertical-align: middle;
+              font-size: 6.65px;
+              line-height: 1.02;
+              white-space: normal;
+            }
+            .unique-items td { height: 4.05mm; }
+            .unique-items td:first-child,
+            .unique-items td:nth-child(5),
+            .unique-items td:nth-child(6),
+            .unique-items td:nth-child(7),
+            .unique-items td:nth-child(12) { text-align: center; }
+            .unique-items td.unique-product {
+              padding-left: .5mm;
+              text-align: left;
+              white-space: normal;
+              overflow-wrap: anywhere;
+              line-height: 1.08;
+            }
+            .unique-footer {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 43mm;
+              align-items: stretch;
+              gap: 1.5mm;
+              min-height: 37mm;
+              padding-top: 1mm;
+              border-top: .3mm solid #000;
+              font-size: 7.1px;
+              line-height: 1.16;
+            }
+            .unique-footer.has-qr { grid-template-columns: minmax(0, 1fr) 22mm 43mm; }
+            .unique-footer-notes { min-width: 0; padding-right: .8mm; }
+            .unique-words { margin-bottom: .65mm; font-size: 7.35px; }
+            .unique-bank { margin-bottom: .65mm; overflow-wrap: anywhere; }
+            .unique-terms { line-height: 1.2; overflow-wrap: anywhere; }
+            .unique-signature {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+              min-height: 8.5mm;
+              padding-top: 1.5mm;
+            }
+            .unique-signature span { padding-top: .7mm; border-top: .2mm solid #000; }
+            .unique-signature strong { align-self: flex-end; text-align: right; }
+            .unique-gst-note { margin-top: .8mm; font-size: 6.45px; font-style: italic; }
+            .unique-qr {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: flex-start;
+              min-width: 0;
+              padding-top: .3mm;
+              font-size: 6.25px;
+            }
+            .unique-qr img {
+              width: 20mm;
+              height: 20mm;
+              object-fit: contain;
+              image-rendering: auto;
+            }
+            .unique-qr span { margin-top: .25mm; }
+            .unique-totals {
+              min-width: 0;
+              padding-left: 1.3mm;
+              border-left: .2mm solid #000;
+            }
+            .unique-totals > div {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 20mm;
+              align-items: baseline;
+              min-height: 2.75mm;
+              column-gap: 1mm;
+            }
+            .unique-totals > div > b,
+            .unique-totals > div > strong:last-child {
+              text-align: right;
+              font-variant-numeric: tabular-nums;
+              white-space: nowrap;
+            }
+            .unique-net-total {
+              margin-top: .45mm;
+              padding-top: .65mm;
+              border-top: .3mm solid #000;
+              font-size: 8.25px;
+            }
+
+            /* Unique A5: positions and horizontal rules of the supplied bill. */
+            .invoice-a5.invoice-report-unique_a5 {
+              display: flex;
+              flex-direction: column;
+              height: auto;
+              min-height: 138mm;
+              max-height: none;
+              padding: 2mm 3mm;
+              overflow: visible;
+              font: 8px/1.16 "Courier New", monospace;
+            }
+            .invoice-report-unique_a5, .invoice-report-unique_a5 * {
+              font-family: "Courier New", monospace !important;
+            }
+            .unique-header {
+              grid-template-columns: 70% 30%;
+              min-height: 20mm;
+              border: 0;
+            }
+            .unique-firm { padding: 0 2mm 0 0; }
+            .unique-firm > strong { font-size: 11px; margin-bottom: .4mm; }
+            .unique-meta { padding: 0 0 0 1mm; border: 0; }
+            .unique-meta > strong { font-size: 12px; letter-spacing: 0; text-align: left; margin-bottom: 1mm; }
+            .unique-meta > div { grid-template-columns: 20mm 2mm 1fr; min-height: 2.7mm; gap: .4mm; }
+            .unique-firm-gstin {
+              border-top: .2mm dashed #000;
+              text-align: center;
+              font-weight: bold;
+              min-height: 3mm;
+              padding-top: .35mm;
+            }
+            .unique-party {
+              grid-template-columns: minmax(0, 1fr) 26mm minmax(0, 1fr);
+              gap: 2mm;
+              min-height: 24mm;
+              padding: .3mm 0 0;
+              border: 0;
+            }
+            .unique-party-card { font-size: 8px; line-height: 1.15; }
+            .unique-party-card > strong { font-size: 8px; margin: 0; }
+            .unique-party-qr { display: flex; align-items: center; justify-content: center; }
+            .unique-party-qr img { width: 24mm; height: 24mm; object-fit: contain; }
+            .unique-salesman { text-align: center; min-height: 3mm; }
+            .unique-items { flex: 1 0 34mm; overflow: visible; border-top: .2mm solid #000; }
+            .unique-items th, .unique-items td {
+              height: auto;
+              padding: .4mm .15mm;
+              border: 0;
+              font-size: 7.2px;
+              line-height: 1.13;
+              vertical-align: top;
+              overflow: visible;
+              white-space: normal;
+              overflow-wrap: anywhere;
+            }
+            .unique-items th { height: 4mm; border-bottom: .2mm solid #000; font-weight: normal; text-align: center; }
+            .unique-items th:nth-child(2), .unique-items td.unique-product { text-align: left; }
+            .unique-items td:first-child, .unique-items td:nth-child(6),
+            .unique-items td:nth-child(7), .unique-items td:nth-child(8),
+            .unique-items td:nth-child(13) { text-align: center; }
+            .unique-footer {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 51mm;
+              gap: 0 2mm;
+              min-height: 37mm;
+              padding: 0;
+              border: 0;
+              font-size: 8px;
+              line-height: 1.15;
+            }
+            .unique-discounts {
+              grid-column: 1 / -1;
+              grid-row: 1;
+              display: flex;
+              justify-content: space-between;
+              gap: 1mm;
+              padding: .6mm 0;
+              border-top: .2mm solid #000;
+              border-bottom: .2mm solid #000;
+              font-size: 7.5px;
+            }
+            .unique-discounts span { white-space: nowrap; }
+            .unique-bank { grid-column: 1 / -1; grid-row: 2; margin: .5mm 0; overflow-wrap: anywhere; }
+            .unique-footer-notes { grid-column: 1; grid-row: 3; padding: 0; }
+            .unique-declaration { margin-top: .5mm; }
+            .unique-fssai { margin-top: 1mm; }
+            .unique-signature { min-height: 4mm; padding: .8mm 0 0; }
+            .unique-signature strong { text-align: left; }
+            .unique-totals { grid-column: 2; grid-row: 3; padding: 0; border: 0; }
+            .unique-totals > div { grid-template-columns: minmax(0, 1fr) 24mm; min-height: 2.7mm; gap: .5mm; }
+            .unique-totals > div > :last-child { text-align: right; white-space: nowrap; }
+            .unique-net-total { margin-top: .4mm; padding: 0; border: 0; font-size: 9px; }
+            .unique-gst-note { grid-column: 1 / -1; grid-row: 4; margin-top: 1mm; text-align: center; font: 9px Arial, sans-serif !important; }
 
             @media print {
               html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
@@ -5769,10 +6214,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                 break-inside: avoid-page !important;
                 page-break-inside: avoid !important;
               }
-              /* Long addresses or terms must flow onto another page rather
-                 than silently disappear beyond the A5 clipping boundary. */
+              /* The Unique A5 template paginates its item rows itself. Keep
+                 each generated page at the exact A5 printable dimensions. */
               .invoice-a5.invoice-report-unique_a5 {
                 height: auto !important;
+                min-height: 138mm !important;
                 max-height: none !important;
                 overflow: visible !important;
                 break-inside: auto !important;
@@ -5839,14 +6285,15 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     ========================================================= */
 
   const productWiseColumnOptions = [
-    { key: "srNo", label: "SrNo", required: true },
-    { key: "mrp", label: "MRP" },
-    { key: "shortCode", label: "Short Code" },
-    { key: "productCode", label: "Prod Code" },
     { key: "productName", label: "Product Name", required: true },
+    { key: "mrp", label: "MRP" },
     { key: "unitQty", label: "Unit Qty" },
     { key: "qty", label: "Qty" },
+    { key: "cases", label: "Case" },
     { key: "totalQty", label: "Total Qty", required: true },
+    { key: "srNo", label: "SrNo" },
+    { key: "shortCode", label: "Short Code" },
+    { key: "productCode", label: "Prod Code" },
     { key: "discount", label: "Discount" },
     { key: "netAmount", label: "Net Amt" },
     { key: "weight", label: "Kg" },
@@ -5854,31 +6301,32 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   ];
 
   const partyWiseColumnOptions = [
-    { key: "srNo", label: "SrNo", required: true },
-    { key: "billDate", label: "Bill Date" },
-    { key: "companyName", label: "Company Name" },
     { key: "billSeries", label: "Bill Series" },
     { key: "billNo", label: "Bill No.", required: true },
-    { key: "billType", label: "Bill Type" },
-    { key: "partyCode", label: "Party Code" },
+    { key: "billDate", label: "Bill Date" },
     { key: "partyName", label: "Party Name", required: true },
     { key: "billAmount", label: "Bill Amt" },
     { key: "cash", label: "Cash" },
     { key: "cheque", label: "Cheque" },
-    { key: "remark", label: "Remark" },
+    { key: "upi", label: "UPI" },
     { key: "pending", label: "Pending" },
     { key: "areaName", label: "Area Name" },
+    { key: "salesman", label: "Salesman Name" },
+    { key: "srNo", label: "SrNo" },
+    { key: "companyName", label: "Company Name" },
+    { key: "billType", label: "Bill Type" },
+    { key: "partyCode", label: "Party Code" },
+    { key: "remark", label: "Remark" },
     { key: "narration", label: "Narration" },
     { key: "gstNo", label: "GST No" },
     { key: "compInvNo", label: "CompInvNo" },
-    { key: "salesman", label: "Salesman" },
   ];
 
   const defaultProductWiseColumns =
-    productWiseColumnOptions.map((column) => column.key);
+    ["productName", "mrp", "unitQty", "qty", "cases", "totalQty"];
 
   const defaultPartyWiseColumns =
-    partyWiseColumnOptions.map((column) => column.key);
+    ["billSeries", "billNo", "billDate", "partyName", "billAmount", "cash", "cheque", "upi", "pending", "areaName", "salesman"];
 
   const getActivePrintLoadColumnOptions = (
     reportLevel = printLoadFormData.reportLevel
@@ -8149,9 +8597,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     const defaults = createDefaultPrintLoadForm();
 
     try {
-      const savedValue = localStorage.getItem(
-        "printLoadDefaultSettings"
-      );
+      const savedValue = localStorage.getItem(`printLoadDefaultSettings:${localStorage.getItem("distributorId") || ""}`);
 
       if (!savedValue) {
         return defaults;
@@ -8250,56 +8696,27 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setShowPrintLoadColumnModal,
   ] = useState(false);
 
-  /* =========================================================
-    AUTOMATICALLY SAVE SELECTED COLUMNS AND SETTINGS
-    ========================================================= */
-
+  const [printLoadSettingsLoading, setPrintLoadSettingsLoading] = useState(false);
   useEffect(() => {
-    try {
-      const settingsToSave = {
-        reportLevel: printLoadFormData.reportLevel,
-        printOn: printLoadFormData.printOn,
-        orderBy: printLoadFormData.orderBy,
-        productGroupBy:
-          printLoadFormData.productGroupBy,
-        partyGroupBy:
-          printLoadFormData.partyGroupBy,
-        sortDirection:
-          printLoadFormData.sortDirection,
-
-        productWiseSelectedColumns: Array.isArray(
-          printLoadFormData.productWiseSelectedColumns
-        )
-          ? printLoadFormData.productWiseSelectedColumns
-          : defaultProductWiseColumns,
-
-        partyWiseSelectedColumns: Array.isArray(
-          printLoadFormData.partyWiseSelectedColumns
-        )
-          ? printLoadFormData.partyWiseSelectedColumns
-          : defaultPartyWiseColumns,
-      };
-
-      localStorage.setItem(
-        "printLoadDefaultSettings",
-        JSON.stringify(settingsToSave)
-      );
-    } catch (error) {
-      console.error(
-        "Failed to save Print Load settings:",
-        error
-      );
-    }
-  }, [
-    printLoadFormData.reportLevel,
-    printLoadFormData.printOn,
-    printLoadFormData.orderBy,
-    printLoadFormData.productGroupBy,
-    printLoadFormData.partyGroupBy,
-    printLoadFormData.sortDirection,
-    printLoadFormData.productWiseSelectedColumns,
-    printLoadFormData.partyWiseSelectedColumns,
-  ]);
+    if (openFormFor !== "Print Load") return undefined;
+    let active = true;
+    setPrintLoadSettingsLoading(true);
+    fetch(`${API_URL}/print-load-settings`)
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Could not load column settings.");
+        if (!active) return;
+        const saved = result.settings;
+        setPrintLoadFormData((previous) => ({
+          ...previous,
+          productWiseSelectedColumns: saved?.productWiseSelectedColumns?.length ? saved.productWiseSelectedColumns : defaultProductWiseColumns,
+          partyWiseSelectedColumns: saved?.partyWiseSelectedColumns?.length ? saved.partyWiseSelectedColumns : defaultPartyWiseColumns,
+        }));
+      })
+      .catch((error) => { if (active) setPrintLoadError(error.message); })
+      .finally(() => { if (active) setPrintLoadSettingsLoading(false); });
+    return () => { active = false; };
+  }, [openFormFor]);
 
 
   const [batchForm, setBatchForm] = useState({
@@ -41524,27 +41941,36 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
 
 
-  const handleSavePrintLoadDefault = () => {
+  const savePrintLoadColumns = async () => {
     try {
-      localStorage.setItem(
-        "printLoadDefaultSettings",
-        JSON.stringify(printLoadFormData)
-      );
-
-      alert(
-        `${printLoadFormData.reportLevel === "party_wise"
-          ? "Party Wise"
-          : "Product Wise"
-        } column selection and Print Load settings saved successfully.`
-      );
+      const response = await fetch(`${API_URL}/print-load-settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productWiseSelectedColumns: printLoadFormData.productWiseSelectedColumns,
+          partyWiseSelectedColumns: printLoadFormData.partyWiseSelectedColumns,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Failed to save Print Load settings.");
+      try {
+        localStorage.setItem(
+          `printLoadDefaultSettings:${localStorage.getItem("distributorId") || ""}`,
+          JSON.stringify(printLoadFormData)
+        );
+      } catch (storageError) {
+        console.warn("Print Load settings saved on server but not cached locally:", storageError);
+      }
+      return true;
     } catch (error) {
-      console.error(
-        "Failed to save Print Load settings:",
-        error
-      );
-
-      alert("Failed to save Print Load settings.");
+      console.error("Failed to save Print Load settings:", error);
+      alert(error.message || "Failed to save Print Load settings.");
+      return false;
     }
+  };
+
+  const handleSavePrintLoadDefault = async () => {
+    if (await savePrintLoadColumns()) alert("Print Load column selections saved for this distributor.");
   };
 
   const handleClearPrintLoad = () => {
@@ -41555,6 +41981,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
     setPrintLoadFormData({
       ...savedSettings,
+      productWiseSelectedColumns: printLoadFormData.productWiseSelectedColumns,
+      partyWiseSelectedColumns: printLoadFormData.partyWiseSelectedColumns,
       loadSeries: "",
       loadNo: "",
       loadDate: new Date()
@@ -41968,6 +42396,9 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         row.Quantity ??
         0,
 
+      cases:
+        row.cases ?? row.Cases ?? 0,
+
       totalQty:
         row.totalQty ??
         row.TotalQty ??
@@ -42064,6 +42495,9 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         row.chequeAmount ??
         0,
 
+      upi:
+        row.upi ?? row.UPI ?? row.online ?? row.Online ?? 0,
+
       remark:
         row.remark ??
         row.remarks ??
@@ -42121,6 +42555,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       "mrp",
       "unitQty",
       "qty",
+      "cases",
       "totalQty",
       "discount",
       "netAmount",
@@ -42129,6 +42564,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       "billAmount",
       "cash",
       "cheque",
+      "upi",
       "pending",
     ].includes(columnKey);
 
@@ -42137,6 +42573,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     columnKey,
     rowIndex
   ) => {
+    if (["unitQty", "qty", "cases", "totalQty", "boxPack"].includes(columnKey) && row[columnKey] === null) return "-";
     const value = getPrintLoadValue(
       row,
       columnKey,
@@ -42151,11 +42588,12 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       [
         "unitQty",
         "qty",
+        "cases",
         "totalQty",
         "boxPack",
       ].includes(columnKey)
     ) {
-      return formatPrintLoadNumber(value, 0);
+      return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
     }
 
     return formatPrintLoadNumber(value, 2);
@@ -42178,12 +42616,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     return pages.length > 0 ? pages : [[]];
   };
 
-  /*
-   * A portrait A4 sheet cannot show every optional load column at a readable
-   * size. Keep the row identifiers on every continuation sheet and split only
-   * the remaining selected columns. This preserves every selected value
-   * without browser "fit to page" shrinking the complete report.
-   */
+  /* Share the landscape sheet between all selected columns. */
   const getPrintLoadColumnWeight = (columnKey) => {
     const wideColumns = [
       "productName",
@@ -42211,49 +42644,6 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     return 12;
   };
 
-  const getPrintLoadColumnGroups = (columns, reportLevel) => {
-    if (columns.length <= 1) return [columns];
-
-    const identityKeys = reportLevel === "party_wise"
-      ? ["srNo", "billNo", "partyName"]
-      : ["srNo", "productCode", "productName"];
-    const identityColumns = columns.filter((column) =>
-      identityKeys.includes(column.key)
-    );
-    const remainingColumns = columns.filter(
-      (column) => !identityKeys.includes(column.key)
-    );
-    const identityWeight = identityColumns.reduce(
-      (total, column) => total + getPrintLoadColumnWeight(column.key),
-      0
-    );
-    const maximumWeight = 92;
-    const groups = [];
-    let currentColumns = [...identityColumns];
-    let currentWeight = identityWeight;
-
-    remainingColumns.forEach((column) => {
-      const columnWeight = getPrintLoadColumnWeight(column.key);
-      if (
-        currentColumns.length > identityColumns.length &&
-        currentWeight + columnWeight > maximumWeight
-      ) {
-        groups.push(currentColumns);
-        currentColumns = [...identityColumns];
-        currentWeight = identityWeight;
-      }
-
-      currentColumns.push(column);
-      currentWeight += columnWeight;
-    });
-
-    if (currentColumns.length > identityColumns.length || groups.length === 0) {
-      groups.push(currentColumns);
-    }
-
-    return groups;
-  };
-
   const selectedPrintLoadColumnOptions =
     getActivePrintLoadColumnOptions().filter(
       (column) =>
@@ -42261,11 +42651,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           column.key
         )
     );
-  const PRINT_LOAD_ROWS_PER_PAGE = 32;
-  const printLoadColumnGroups = getPrintLoadColumnGroups(
-    selectedPrintLoadColumnOptions,
-    printLoadFormData.reportLevel
-  );
+  const PRINT_LOAD_ROWS_PER_PAGE = 18;
+  const printLoadColumnGroups = [selectedPrintLoadColumnOptions];
   const printLoadPages = chunkPrintLoadRows(
     printLoadItems,
     PRINT_LOAD_ROWS_PER_PAGE
@@ -42378,11 +42765,11 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           <head>
             <title>Print Load</title>
             <style>
-              @page { size: A4 portrait; margin: 8mm; }
+              @page { size: A4 landscape; margin: 8mm; }
               * { box-sizing: border-box; }
-              html, body { width: 194mm; margin: 0; padding: 0; }
+              html, body { width: 281mm; margin: 0; padding: 0; }
               body { color: #000; font: 10pt Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .print-load-document-page { width: 194mm; min-height: 281mm; break-after: page; }
+              .print-load-document-page { width: 281mm; min-height: 194mm; break-after: page; }
               .print-load-document-page:last-child { break-after: auto; }
               .print-load-document-header h1 { font-size: 14pt; margin: 0 0 3mm; }
               .print-load-document-details { font-size: 9.5pt; line-height: 1.35; margin-bottom: 4mm; }
@@ -42395,18 +42782,14 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
               }
               th, td {
                 border: 1px solid #555;
-                padding: 1.1mm 0.8mm;
-                font-size: 9pt;
+                padding: .8mm .5mm;
+                font-size: var(--load-table-font, 8pt);
                 line-height: 1.2;
                 overflow-wrap: anywhere;
                 word-break: break-word;
                 vertical-align: top;
               }
-              th { background: #eee; color: #000; font-size: 9pt; font-weight: 700; text-align: left; }
-              .print-load-col-productName, .print-load-col-partyName { width: 30%; }
-              .print-load-col-companyName, .print-load-col-narration, .print-load-col-remark { width: 24%; }
-              .print-load-col-productCode, .print-load-col-shortCode, .print-load-col-partyCode, .print-load-col-gstNo, .print-load-col-compInvNo, .print-load-col-salesman { width: 15%; }
-              .print-load-col-srNo { width: 7%; }
+              th { background: #eee; color: #000; font-weight: 700; text-align: left; }
               .number-cell, .print-load-document-total-label { text-align: right; }
               .print-load-document-total-label, .print-load-document-total-value { font-weight: 700; }
               tr { break-inside: avoid; }
@@ -68393,6 +68776,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         type="button"
                         className="print-load-default-button"
                         onClick={handleSavePrintLoadDefault}
+                        disabled={printLoadSettingsLoading}
                       >
                         <Save size={15} />
                         Save as Default
@@ -68429,7 +68813,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           type="button"
                           className="print-load-preview-button"
                           onClick={handlePrintLoadPreview}
-                          disabled={printLoadLoading}
+                          disabled={printLoadLoading || printLoadSettingsLoading}
                         >
                           <Eye size={16} />
                           Preview
@@ -68439,7 +68823,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           type="submit"
                           className="print-load-print-button"
                           form="print-load-form"
-                          disabled={printLoadLoading}
+                          disabled={printLoadLoading || printLoadSettingsLoading}
                         >
                           <Printer size={16} />
 
@@ -68728,6 +69112,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <button
                         type="button"
                         className="print-load-single-column-button"
+                        disabled={printLoadSettingsLoading}
                         onClick={() =>
                           setShowPrintLoadColumnModal(true)
                         }
@@ -68896,12 +69281,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <button
                               type="button"
                               className="print-load-column-apply"
-                              onClick={() =>
-                                setShowPrintLoadColumnModal(false)
-                              }
+                              onClick={async () => {
+                                if (await savePrintLoadColumns()) setShowPrintLoadColumnModal(false);
+                              }}
                             >
                               <CheckCircle2 size={16} />
-                              Apply Columns
+                              Apply &amp; Save Columns
                             </button>
                           </div>
                         </div>
@@ -69086,6 +69471,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                             {printLoadAreaName || "ALL"}
                                           </div>
 
+                                          {printLoadFormData.reportLevel === "party_wise" && printLoadItems.some((row) => Number(row.unclassifiedPayment) > 0) && (
+                                            <div><b>Unclassified receipts:</b>{" "}{printLoadItems.filter((row) => Number(row.unclassifiedPayment) > 0).map((row) => `${row.billSeries || ""}-${row.billNo}: ${formatPrintLoadNumber(row.unclassifiedPayment, 2)}`).join(", ")}. These amounts are deducted from pending.</div>
+                                          )}
+
                                           <div>
                                             <b>Print Date :</b>{" "}
                                             {new Date().toLocaleDateString(
@@ -69107,12 +69496,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   COMPACT TABLE
                                   ===================================== */}
                                       <div className="print-load-document-table-wrap">
-                                        <table className="print-load-document-table">
+                                        <table className="print-load-document-table" style={{ "--load-table-font": pageColumns.length > 16 ? "6.5pt" : pageColumns.length > 12 ? "7.25pt" : "8.5pt" }}>
                                           <colgroup>
                                             {pageColumns.map((column) => (
                                               <col
                                                 key={column.key}
                                                 className={`print-load-col-${column.key}`}
+                                                style={{ width: `${100 * getPrintLoadColumnWeight(column.key) / pageColumns.reduce((sum, selected) => sum + getPrintLoadColumnWeight(selected.key), 0)}%` }}
                                               />
                                             ))}
                                           </colgroup>
@@ -69222,7 +69612,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                                             className="number-cell print-load-document-total-value"
                                                           >
                                                             {formatPrintLoadNumber(
-                                                              printLoadTotalAmount,
+                                                              printLoadItems.reduce((sum, row) => sum + Number(getPrintLoadValue(row, totalColumnKey, 0) || 0), 0),
                                                               2
                                                             )}
                                                           </td>

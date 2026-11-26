@@ -10,6 +10,7 @@ import generalSetupRoutes from "./generalSetup.js";
 import companyWiseSeriesRoutes from "./companyWiseSeries.js";
 import createBatchLockRouter from "./batchLock.js";
 import printAccountDetailsRoutes from "./printAccountDetails.js";
+import { buildPrintLoadProductRows, buildPrintLoadPartyRows } from "./printLoadData.js";
 import createSecuritySetupRouter from "./securitySetup.js";
 import { authorizeAny } from "./authorizeAny.js";
 import { allowedBrowserOrigin, browserLoginRequested, createBrowserSession, revokeBrowserSession } from "./browserSessions.js";
@@ -20608,10 +20609,47 @@ app.post(
   }
 );
 
+const printLoadSettingsSchema = new mongoose.Schema({
+  distributorId: { type: String, required: true, unique: true },
+  productWiseSelectedColumns: [String],
+  partyWiseSelectedColumns: [String],
+}, { timestamps: true, collection: "PrintLoadSettings" });
+const PrintLoadSettings = mongoose.models.PrintLoadSettings || mongoose.model("PrintLoadSettings", printLoadSettingsSchema);
+const printLoadColumns = {
+  productWiseSelectedColumns: ["srNo", "productName", "mrp", "unitQty", "qty", "cases", "totalQty", "shortCode", "productCode", "discount", "netAmount", "weight", "boxPack"],
+  partyWiseSelectedColumns: ["srNo", "billSeries", "billNo", "billDate", "partyName", "billAmount", "cash", "cheque", "upi", "pending", "areaName", "salesman", "companyName", "billType", "partyCode", "remark", "narration", "gstNo", "compInvNo"],
+};
+app.get("/api/print-load-settings", ensureConnection, securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "print"), async (req, res) => {
+  try {
+    const settings = await PrintLoadSettings.findOne({ distributorId: req.auth.distributorId }).lean();
+    res.json({ success: true, settings: settings ? { productWiseSelectedColumns: settings.productWiseSelectedColumns, partyWiseSelectedColumns: settings.partyWiseSelectedColumns } : null });
+  } catch (error) {
+    console.error("Print Load settings read error:", error);
+    res.status(500).json({ success: false, message: "Could not load Print Load column settings." });
+  }
+});
+app.put("/api/print-load-settings", ensureConnection, securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "print"), async (req, res) => {
+  try {
+    const update = {};
+    for (const [field, allowed] of Object.entries(printLoadColumns)) {
+      const columns = req.body?.[field];
+      if (!Array.isArray(columns) || !columns.length || columns.some((column) => typeof column !== "string" || !allowed.includes(column))) {
+        return res.status(400).json({ success: false, message: "Invalid Print Load column selection." });
+      }
+      update[field] = [...new Set(columns)];
+    }
+    const settings = await PrintLoadSettings.findOneAndUpdate({ distributorId: req.auth.distributorId }, { $set: update }, { upsert: true, new: true, runValidators: true }).lean();
+    res.json({ success: true, settings: { productWiseSelectedColumns: settings.productWiseSelectedColumns, partyWiseSelectedColumns: settings.partyWiseSelectedColumns } });
+  } catch (error) {
+    console.error("Print Load settings save error:", error);
+    res.status(500).json({ success: false, message: "Could not save Print Load column settings." });
+  }
+});
+
 app.get("/api/print-load", ensureConnection, securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "print"), async (req, res) => {
   try {
     const { distributorId, firmId } = req.auth;
-    const { loadSeries, loadNo, reportLevel } = req.query;
+    const { loadSeries, loadNo, reportLevel, withFreeQty } = req.query;
 
     const load = await LoadHeader.findOne({
       DistributorId: distributorId,
@@ -20626,78 +20664,29 @@ app.get("/api/print-load", ensureConnection, securityRouter.authorizeRequest("SA
     }
 
     const loadBills = load.Bills || [];
-    let rows = [];
-
+    const billConditions = loadBills.map((b) => {
+      const id = String(b.SalesBillId || b.salesBillId || "").trim();
+      if (mongoose.Types.ObjectId.isValid(id)) return { _id: new mongoose.Types.ObjectId(id) };
+      const number = Number(b.BillNo ?? b.billNo);
+      if (!number) return null;
+      return { BillSeries: String(b.BillSeries ?? b.Series ?? b.billSeries ?? "").trim(), BillNo: number };
+    }).filter(Boolean);
+    const salesBills = billConditions.length ? await SalesHeader.find({ distributorId, firmId, isActive: true, $or: billConditions }).lean() : [];
+    let rows;
     if (reportLevel === "party_wise") {
-      rows = loadBills.map((b, index) => ({
-        sr: index + 1,
-        billDate: b.BillDate || b.billDate || "",
-        companyName: b.CompanyName || load.CompanyName || "",
-        billSeries: b.Series || b.BillSeries || b.billSeries || "",
-        billNo: b.BillNo || b.billNo || "",
-        billType: b.BillType || b.billType || "CREDIT",
-        partyCode: b.PartyCode || b.partyCode || "",
-        partyName: b.PartyName || b.partyName || "",
-        amount: Number(b.Amount || b.billAmount || b.NetAmount || 0),
-        cash: Number(b.Cash || b.cash || 0),
-        cheque: Number(b.Cheque || b.cheque || 0),
-        online: Number(b.Online || b.online || 0),
-        upi: Number(b.UPI || b.upi || 0),
-      }));
+      const receiptConditions = loadBills.map((b) => ({
+        billSeries: String(b.BillSeries ?? b.Series ?? b.billSeries ?? "").trim(),
+        billNo: String(b.BillNo ?? b.billNo ?? "").trim(),
+      })).filter((b) => b.billNo);
+      const [receipts, settlement] = await Promise.all([
+        receiptConditions.length ? Receipt.find({ distributorId, firmId, $or: receiptConditions }).lean() : [],
+        SettleLoad.findOne({ distributorId, firmId, loadSeries: String(loadSeries).trim(), loadNo: String(loadNo).trim(), isActive: true }).lean(),
+      ]);
+      rows = buildPrintLoadPartyRows(loadBills, salesBills, receipts, settlement?.bills || []);
     } else {
-      const billConditions = loadBills
-        .map((b) => ({
-          BillSeries: String(b.Series || b.BillSeries || b.billSeries || "").trim(),
-          BillNo: Number(b.BillNo || b.billNo),
-        }))
-        .filter((b) => b.BillSeries && b.BillNo);
-
-      const salesBills = await SalesHeader.find({
-        distributorId,
-        firmId,
-        isActive: true,
-        $or: billConditions,
-      }).lean();
-
-      const productMap = {};
-
-      salesBills.forEach((bill) => {
-        (bill.items || []).forEach((p) => {
-          const prodCode = p.productCode || p.ProdCode || p.code || "";
-          const prodName = p.productName || p.ProdName || p.name || p.product || "";
-          const mrp = Number(p.mrp || p.MRP || 0);
-          const hsnCode = p.hsnCode || p.HSNCode || p.hsn || "";
-
-          const key = `${prodCode}_${prodName}_${mrp}_${hsnCode}`;
-
-          if (!productMap[key]) {
-            productMap[key] = {
-              mrp,
-              prodName,
-              hsnCode,
-              cases: 0,
-              outer: 0,
-              unitQty: 0,
-              totalQty: 0,
-              netAmt: 0,
-            };
-          }
-
-          const qty = Number(p.qty || p.Qty || p.quantity || 0);
-          const boxPack = Number(p.boxPack || p.BoxPack || 0);
-
-          productMap[key].cases += Number(p.cases || p.Cases || (boxPack ? Math.floor(qty / boxPack) : 0));
-          productMap[key].outer += Number(p.outer || p.Outer || 0);
-          productMap[key].unitQty += Number(p.unitQty || p.UnitQty || 0);
-          productMap[key].totalQty += Number(p.totalQty || p.TotalQty || qty);
-          productMap[key].netAmt += Number(p.amount || p.Amount || p.netAmt || p.NetAmount || p.taxable || 0);
-        });
-      });
-
-      rows = Object.values(productMap).map((r, index) => ({
-        sr: index + 1,
-        ...r,
-      }));
+      const codes = [...new Set(salesBills.flatMap((bill) => (bill.items || []).map((item) => String(item.productCode || item.ProdCode || item.code || "").trim())).filter(Boolean))];
+      const products = codes.length ? await Product.find({ distributorId, firmId, productCode: { $in: codes } }).select("productCode productName boxPack hsn shortCode weight").lean() : [];
+      rows = buildPrintLoadProductRows(salesBills, products, withFreeQty !== "no");
     }
 
     res.json({

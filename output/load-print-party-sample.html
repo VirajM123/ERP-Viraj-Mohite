@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+              @page { size: A4 landscape; margin: 8mm; }
+              * { box-sizing: border-box; }
+              html, body { width: 281mm; margin: 0; padding: 0; }
+              body { color: #000; font: 10pt Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .print-load-document-page { width: 281mm; min-height: 194mm; break-after: page; }
+              .print-load-document-page:last-child { break-after: auto; }
+              .print-load-document-header h1 { font-size: 14pt; margin: 0 0 3mm; }
+              .print-load-document-details { font-size: 9.5pt; line-height: 1.35; margin-bottom: 4mm; }
+              .print-load-header-gap { margin-left: 6mm; }
+              .print-load-document-table-wrap { width: 100%; }
+              table {
+                width: 100%;
+                table-layout: fixed;
+                border-collapse: collapse;
+              }
+              th, td {
+                border: 1px solid #555;
+                padding: .8mm .5mm;
+                font-size: var(--load-table-font, 8pt);
+                line-height: 1.2;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+                vertical-align: top;
+              }
+              th { background: #eee; color: #000; font-weight: 700; text-align: left; }
+              .number-cell, .print-load-document-total-label { text-align: right; }
+              .print-load-document-total-label, .print-load-document-total-value { font-weight: 700; }
+              tr { break-inside: avoid; }
+              @media print {
+                body {
+                  background: white;
+                  padding: 0;
+                }
+                .no-print {
+                  display: none !important;
+                }
+              }
+            
+    @media screen { html, body { width:297mm; height:210mm; margin:0; background:white; } body { padding:8mm; } }
+  </style></head><body><section class="print-load-document-page"><header class="print-load-document-header"><h1>UNIQUE ENTERPRISES</h1><div class="print-load-document-details">
+    <div><b>Report :</b> Print Load - Party Wise</div>
+    <div><b>Load No. :</b> LD-1 <span class="print-load-header-gap"><b>Load Date :</b> 26/11/2026</span></div>
+    <div><b>Narration :</b> -</div><div><b>Total Bills :</b> 3 <span class="print-load-header-gap"><b>Total Party :</b> 3</span><span class="print-load-header-gap"><b>Total Amt :</b> 5,300.00</span></div>
+    <div><b>Area Name :</b> KONDWA, PUNE, KATRAJ</div><div><b>Print Date :</b> 26/11/2026</div><div><b>Page :</b> 1/1</div>
+    </div></header><div class="print-load-document-table-wrap"><table class="print-load-document-table" style="--load-table-font:8.5pt"><colgroup><col class="print-load-col-billSeries" style="width:8%"><col class="print-load-col-billNo" style="width:8%"><col class="print-load-col-billDate" style="width:8%"><col class="print-load-col-partyName" style="width:16%"><col class="print-load-col-billAmount" style="width:9.333333333333334%"><col class="print-load-col-cash" style="width:8%"><col class="print-load-col-cheque" style="width:8%"><col class="print-load-col-upi" style="width:8%"><col class="print-load-col-pending" style="width:9.333333333333334%"><col class="print-load-col-areaName" style="width:8%"><col class="print-load-col-salesman" style="width:9.333333333333334%"></colgroup><thead><tr><th class="">Bill Series</th><th class="">Bill No.</th><th class="">Bill Date</th><th class="">Party Name</th><th class="number-cell">Bill Amt</th><th class="number-cell">Cash</th><th class="number-cell">Cheque</th><th class="number-cell">UPI</th><th class="number-cell">Pending</th><th class="">Area Name</th><th class="">Salesman Name</th></tr></thead><tbody><tr><td class="">UE</td><td class="">101</td><td class="">26/11/2026</td><td class="">VIJAY TRADING</td><td class="number-cell">1,000.00</td><td class="number-cell">400.00</td><td class="number-cell">0.00</td><td class="number-cell">0.00</td><td class="number-cell">600.00</td><td class="">KONDWA</td><td class="">VILAS</td></tr><tr><td class="">UE</td><td class="">102</td><td class="">26/11/2026</td><td class="">OM GENERAL STORE</td><td class="number-cell">2,500.00</td><td class="number-cell">0.00</td><td class="number-cell">1,000.00</td><td class="number-cell">0.00</td><td class="number-cell">1,500.00</td><td class="">PUNE</td><td class="">VILAS</td></tr><tr><td class="">UE</td><td class="">103</td><td class="">26/11/2026</td><td class="">SAMPLE RETAILERS</td><td class="number-cell">1,800.00</td><td class="number-cell">0.00</td><td class="number-cell">0.00</td><td class="number-cell">800.00</td><td class="number-cell">1,000.00</td><td class="">KATRAJ</td><td class="">RAJ</td></tr></tbody><tfoot><tr><td colspan="4" class="print-load-document-total-label">Total</td><td class="number-cell print-load-document-total-value">5,300.00</td><td></td><td></td><td></td><td></td><td></td><td></td></tr></tfoot></table></div></section></body></html>

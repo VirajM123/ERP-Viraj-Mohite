@@ -1,0 +1,1337 @@
+
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0"
+          />
+
+          <title>
+            Invoice UE-2
+          </title>
+
+          <style>
+            @page {
+    size: A5 landscape;
+    margin: 5mm;
+  }
+
+            * { box-sizing: border-box; }
+
+            html, body { margin: 0; padding: 0; }
+
+            body {
+              background: #e7edf4;
+              color: #000;
+              font-family: Calibri, "Segoe UI", Arial, sans-serif;
+              font-size: 10px;
+              line-height: 1.2;
+            }
+
+            .invoice-page,
+            .invoice-page table,
+            .invoice-page th,
+            .invoice-page td,
+            .invoice-page div,
+            .invoice-page span,
+            .invoice-page strong {
+              font-family: Calibri, "Segoe UI", Arial, sans-serif;
+            }
+
+            .invoice-preview-toolbar {
+              width: min(97vw, 1320px);
+              margin: 16px auto 12px;
+              padding: 10px 14px;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              background: #fff;
+              border: 1px solid #b9c4d1;
+            }
+
+            .preview-title { font-size: 14px; font-weight: 700; }
+            .preview-subtitle { margin-top: 2px; color: #334155; font-size: 11px; }
+            .toolbar-actions { display: flex; gap: 8px; }
+
+            .toolbar-actions button {
+              height: 34px;
+              padding: 0 17px;
+              border: 1px solid #9aa9bb;
+              background: #fff;
+              color: #111;
+              font-weight: 700;
+              cursor: pointer;
+            }
+
+            .toolbar-actions .print-button {
+              background: #2f5fe3;
+              border-color: #2f5fe3;
+              color: #fff;
+            }
+
+            .preview-shell { padding: 0 12px 24px; }
+
+            .invoice-page {
+    position: relative;
+    margin: 0 auto 14px;
+    overflow: hidden;
+    background: #ffffff;
+    color: #000000;
+    break-after: page;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+
+  .invoice-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  /*
+  * Full A4 portrait printable area.
+  * 210mm × 297mm paper minus print margins.
+  */
+  /*
+  * A4 Portrait:
+  * Paper size 210mm × 297mm.
+  */
+  .invoice-a4 {
+    width: 196mm;
+    min-height: 283mm;
+    padding: 4mm 5mm;
+    font-size: 10px;
+  }
+
+  /*
+  * A5 Landscape:
+  * Paper size 210mm × 148mm.
+  * The same report design is fitted to the complete A5 landscape page.
+  */
+  .invoice-a5 {
+    width: 200mm;
+    min-height: 138mm;
+    padding: 3mm 4mm;
+    font-size: 8px;
+  }
+
+  /*
+  * A5 Landscape fitting.
+  * Keeps the same report design, only scales spacing and font.
+  */
+  .invoice-a5 .report-top {
+    min-height: 25mm;
+  }
+
+  .invoice-a5 .firm-block,
+  .invoice-a5 .invoice-block {
+    padding-top: 0.7mm;
+    padding-bottom: 0.7mm;
+  }
+
+  .invoice-a5 .firm-block {
+    padding-left: 2mm;
+  }
+
+  .invoice-a5 .invoice-block {
+    padding-left: 4mm;
+  }
+
+  .invoice-a5 .firm-name {
+    font-size: 10px;
+    margin-bottom: 0.6mm;
+  }
+
+  .invoice-a5 .tax-heading {
+    font-size: 11px;
+    margin-bottom: 1mm;
+  }
+
+  .invoice-a5 .compact-lines {
+    min-height: 6mm;
+    line-height: 1.2;
+  }
+
+  .invoice-a5 .label-value {
+    grid-template-columns: 22mm 2mm minmax(0, 1fr);
+    min-height: 3.2mm;
+    column-gap: 0.5mm;
+  }
+
+  .invoice-a5 .info-line {
+    min-height: 3.2mm;
+    gap: 0.8mm;
+  }
+
+  .invoice-a5 .push-label {
+    margin-left: 3mm;
+  }
+
+  .invoice-a5 .party-grid {
+    min-height: 27mm;
+    padding: 1mm 2mm;
+    column-gap: 2mm;
+  }
+
+  .invoice-a5 .middle-party-details {
+    padding-top: 0;
+  }
+
+  .invoice-a5 .party-heading,
+  .invoice-a5 .party-name {
+    font-size: 8px;
+    margin-bottom: 0.6mm;
+  }
+
+  .invoice-a5 .crystal-table th {
+    height: 7mm;
+    padding: 0.4mm 0.25mm;
+    font-size: 6.8px;
+    line-height: 1.05;
+  }
+
+  .invoice-a5 .crystal-table th small {
+    font-size: 5.7px;
+  }
+
+  .invoice-a5 .crystal-table td {
+    height: 4.5mm;
+    padding: 0.3mm 0.25mm;
+    font-size: 6.8px;
+    line-height: 1.05;
+  }
+
+  .invoice-a5 .total-words-row {
+    min-height: 6mm;
+    padding: 1mm 2mm;
+  }
+
+  .invoice-a5 .invoice-quick-totals {
+    min-height: 4.5mm;
+    padding: 0.5mm 1mm;
+    font-size: 6.8px;
+  }
+
+  .invoice-a5 .bottom-middle-grid {
+    min-height: 26mm;
+  }
+
+  .invoice-a5 .amount-summary-row {
+    min-height: 2.8mm;
+  }
+
+  .invoice-a5 .invoice-footer-grid {
+    min-height: 25mm;
+  }
+
+  .invoice-a5 .footer-bank-row {
+    min-height: 6mm;
+    padding: 1mm;
+    gap: 2mm;
+  }
+
+  .invoice-a5 .footer-declaration-row {
+    min-height: 18mm;
+  }
+
+            .copy-label { position: absolute; right: 4mm; top: 1.5mm; font-size: 7px; }
+
+             .report-top {
+              display: grid;
+              grid-template-columns: minmax(0, 58%) minmax(0, 42%);
+              width: 100%;
+              min-height: 28mm;
+              padding-bottom: 1.5mm;
+              border-bottom: 1px solid #000;
+            }
+
+            .firm-block, .invoice-block { min-width: 0; padding: 0.8mm 2mm; }
+            .firm-block { padding-left: 1mm; }
+            .invoice-block { padding-left: 8mm; }
+            .firm-name { margin: 0 0 1mm; font-size: 15px; line-height: 1.15; font-weight: 800; letter-spacing: 0.15px; }
+            .tax-heading { margin: 0 0 1.5mm; font-size: 13px; line-height: 1.2; font-weight: 800; letter-spacing: 0.7px; }
+            .compact-lines { min-height: 7mm; line-height: 1.35; }
+
+            .header-inline-details {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 0.8mm 5mm;
+              margin-top: 0.8mm;
+              line-height: 1.35;
+            }
+
+            .firm-tax-details { padding-top: 0.7mm; border-top: 1px dotted #666; }
+
+            .label-value {
+              display: grid;
+              grid-template-columns: 28mm 3mm minmax(0, 1fr);
+              align-items: baseline;
+              min-height: 4.2mm;
+              column-gap: 1mm;
+            }
+
+            .label-value > span, .label-value > strong { min-width: 0; overflow-wrap: anywhere; }
+
+            .info-line {
+              display: flex;
+              align-items: baseline;
+              min-height: 4.2mm;
+              gap: 1.3mm;
+              white-space: normal;
+            }
+
+            .info-line > span, .info-line > strong { min-width: 0; }
+            .push-label { margin-left: 7mm; }
+
+            .long-dash {
+              display: none;
+            }
+
+            .party-grid {
+              display: grid;
+              grid-template-columns: minmax(0, 39%) minmax(0, 22%) minmax(0, 39%);
+              width: 100%;
+              min-height: 30mm;
+              padding: 2mm 1mm 1.5mm;
+              column-gap: 6mm;
+              border-bottom: 1px solid #000;
+            }
+
+            .party-block, .middle-party-details { min-width: 0; }
+            .middle-party-details { padding: 0; }
+            .party-heading { margin: 0 0 1.4mm; padding-bottom: 0.7mm; border-bottom: 1px solid #000; font-size: 9px; line-height: 1.2; font-weight: 800; text-transform: uppercase; }
+            .party-name { margin: 0 0 1mm; font-size: 10px; line-height: 1.2; font-weight: 700; }
+
+            .items-wrap {
+              width: 100%;
+              border-bottom: 1px solid #000;
+            }
+
+            .crystal-table {
+              width: 100%;
+              border-spacing: 0;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+
+            .crystal-table thead { display: table-header-group; }
+            .crystal-table th, .crystal-table td { border-right: 1px solid #000; }
+            .crystal-table th:last-child, .crystal-table td:last-child { border-right: 0; }
+
+            .crystal-table th {
+              height: 6.5mm;
+              padding: 0.7mm 0.45mm;
+              border-top: 1px solid #000;
+              border-bottom: 1px solid #000;
+              overflow: hidden;
+              text-align: center;
+              vertical-align: middle;
+              font-size: 8px;
+              line-height: 1.15;
+              font-weight: 700;
+              white-space: normal;
+            }
+
+            .crystal-table th small { display: block; margin-top: 0.4mm; font-size: 6.5px; line-height: 1; }
+
+            .crystal-table td {
+              height: 4.5mm;
+              padding: 0.35mm 0.55mm;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              vertical-align: middle;
+              font-size: 8px;
+              line-height: 1.15;
+              white-space: nowrap;
+            }
+
+            .crystal-table .product-name { text-align: left; font-weight: 400; }
+            .left { text-align: left !important; }
+            .center { text-align: center !important; }
+            .number { text-align: right !important; font-variant-numeric: tabular-nums; }
+            .strong { font-weight: 700; }
+            .empty-row td { color: transparent; }
+
+            .invoice-quick-totals {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) auto auto;
+              gap: 10mm;
+              align-items: center;
+              min-height: 6mm;
+              padding: 0.8mm 1mm;
+              border-bottom: 1px solid #000;
+              font-size: 8px;
+            }
+
+            .invoice-quick-totals span:first-child { justify-self: start; }
+            .invoice-quick-totals span:nth-child(2),
+            .invoice-quick-totals span:nth-child(3) { justify-self: end; }
+
+            .tax-cell { padding: 0 !important; }
+            .tax-cell-inner { display: grid; grid-template-columns: 36% 64%; width: 100%; height: 100%; align-items: stretch; }
+            .tax-percent { display: flex; align-items: center; justify-content: center; padding: 0.4mm; border-right: 1px dotted #777; }
+            .tax-amount { display: flex; align-items: center; justify-content: flex-end; padding: 0.4mm 0.7mm; font-variant-numeric: tabular-nums; }
+
+            .invoice-bottom {
+              width: 100%;
+              padding-top: 1.5mm;
+              font-size: 7.5px;
+            }
+
+            .invoice-footer-summary-grid {
+              display: grid;
+              grid-template-columns: 42% 35% 23%;
+              align-items: stretch;
+              width: 100%;
+              min-height: 44mm;
+            }
+
+            .footer-left-column,
+            .footer-tax-column,
+            .footer-total-column {
+              min-width: 0;
+              padding: 0 1.5mm;
+            }
+
+            .footer-section { margin-bottom: 2mm; }
+            .bank-details {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 26mm;
+              column-gap: 2mm;
+              padding-right: 0;
+            }
+            .bank-details-content { min-width: 0; }
+            .bank-details .footer-detail-row {
+              grid-template-columns: 14mm 2mm minmax(0, 1fr);
+              padding-right: 1mm;
+              font-weight: 700;
+            }
+            .bank-details .footer-detail-row span:last-child {
+              overflow-wrap: anywhere;
+              word-break: break-word;
+              font-weight: 700;
+            }
+            .bank-qr-code {
+              position: static;
+              grid-column: 2;
+              grid-row: 1;
+              align-self: start;
+              justify-self: end;
+              width: 26mm;
+              height: 26mm;
+              object-fit: contain;
+              transform: translateY(-2mm);
+              border: 0;
+              background: #fff;
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
+            }
+            .invoice-a5 .bank-details {
+              grid-template-columns: minmax(0, 1fr) 24mm;
+            }
+            .invoice-a5 .bank-qr-code { width: 24mm; height: 24mm; }
+            .footer-section-heading {
+              margin-bottom: 1mm;
+              font-weight: 800;
+              text-transform: uppercase;
+            }
+
+            .footer-detail-row,
+            .footer-total-row {
+              display: grid;
+              grid-template-columns: 22mm 2mm minmax(0, 1fr);
+              align-items: baseline;
+              min-height: 3.4mm;
+              column-gap: 0.6mm;
+            }
+
+            .footer-total-row {
+              grid-template-columns: minmax(0, 1fr) 2mm 24mm;
+            }
+
+            .footer-total-row strong {
+              text-align: right;
+              font-variant-numeric: tabular-nums;
+              white-space: nowrap;
+            }
+
+            .terms-section { margin-top: 1.5mm; line-height: 1.55; }
+
+            .tax-summary-table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              font-size: 6.7px;
+            }
+
+            .tax-summary-table th,
+            .tax-summary-table td {
+              height: 5mm;
+              padding: 0.5mm 0.4mm;
+              border: 1px solid #777;
+              font-weight: 400;
+              white-space: nowrap;
+            }
+
+            .tax-summary-table thead th,
+            .tax-summary-table tfoot th { font-weight: 700; text-align: center; }
+            .tax-summary-table tfoot th.number { text-align: right; }
+
+            .receiver-signature {
+              display: flex;
+              justify-content: flex-end;
+              align-items: flex-end;
+              min-height: 14mm;
+              margin-top: auto;
+              padding-top: 4mm;
+            }
+
+            .receiver-signature span {
+              min-width: 34mm;
+              padding-top: 1mm;
+              border-top: 1px solid #000;
+              text-align: center;
+            }
+
+            .grand-total-row {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 2mm 27mm;
+              align-items: baseline;
+              margin-top: 1mm;
+              padding-top: 1.4mm;
+              border-top: 1px solid #000;
+              font-size: 11px;
+              font-weight: 800;
+              text-transform: uppercase;
+            }
+
+            .grand-total-row strong { text-align: right; white-space: nowrap; }
+            .rounded-off-label { margin-top: 0.8mm; font-size: 6.5px; }
+
+            .invoice-footer-closing {
+              display: grid;
+              grid-template-columns: 1fr auto 1fr;
+              align-items: center;
+              gap: 2mm;
+              margin-top: 1mm;
+              font-size: 10px;
+              font-style: italic;
+            }
+
+            .invoice-footer-closing span { border-top: 1px solid #000; }
+
+            .invoice-a5 .report-top, .invoice-half .report-top { min-height: 22mm; }
+            .invoice-a5 .party-grid, .invoice-half .party-grid { min-height: 25mm; padding-top: 1mm; }
+            .invoice-a5 .crystal-table th, .invoice-half .crystal-table th { height: 7mm; font-size: 6px; }
+            .invoice-a5 .crystal-table td, .invoice-half .crystal-table td { height: 4mm; font-size: 6px; }
+            .invoice-a5 .firm-name, .invoice-half .firm-name { font-size: 10px; }
+            .invoice-a5 .tax-heading, .invoice-half .tax-heading { font-size: 12px; }
+            .invoice-a5 .bottom-middle-grid, .invoice-half .bottom-middle-grid { min-height: 25mm; grid-template-columns: minmax(0, 1fr) 45mm; }
+            .invoice-a5 .invoice-footer-grid, .invoice-half .invoice-footer-grid { min-height: 24mm; }
+            .invoice-a5 .invoice-bottom { padding-top: 1mm; font-size: 6px; }
+            .invoice-a5 .invoice-footer-summary-grid { min-height: 32mm; }
+            .invoice-a5 .footer-left-column,
+            .invoice-a5 .footer-tax-column,
+            .invoice-a5 .footer-total-column { padding: 0 1mm; }
+            .invoice-a5 .footer-section { margin-bottom: 1mm; }
+            .invoice-a5 .footer-detail-row,
+            .invoice-a5 .footer-total-row { min-height: 2.5mm; font-size: 5.8px; }
+            .invoice-a5 .tax-summary-table { font-size: 5.2px; }
+            .invoice-a5 .tax-summary-table th,
+            .invoice-a5 .tax-summary-table td { height: 3.4mm; padding: 0.25mm; }
+            .invoice-a5 .receiver-signature { min-height: 8mm; padding-top: 2mm; }
+            .invoice-a5 .grand-total-row { font-size: 8px; }
+            .invoice-a5 .invoice-footer-closing { font-size: 7px; }
+
+            /* Format 1 / A5: one-line bank and terms leave room for more items. */
+            .invoice-a5.invoice-report-1 .invoice-footer-summary-grid { min-height: 24mm; }
+            .invoice-a5.invoice-report-1 .bank-qr-code { width: 20mm; height: 20mm; }
+
+            /* Format 1 / A4: bank and terms stay horizontal, with protected
+               columns for tax and seven-digit invoice totals. */
+            .invoice-a4.invoice-report-1 .invoice-footer-summary-grid {
+              grid-template-columns: 35% 39% 26%;
+              column-gap: 0;
+            }
+            .invoice-a4.invoice-report-1 .tax-summary-table {
+              width: 100%;
+              font-size: 8px;
+              table-layout: fixed;
+            }
+            .invoice-a4.invoice-report-1 .tax-summary-table th,
+            .invoice-a4.invoice-report-1 .tax-summary-table td {
+              padding: .35mm .2mm;
+              font-size: 8px;
+              white-space: normal;
+            }
+            .invoice-a4.invoice-report-1 .tax-summary-table td { white-space: nowrap; }
+            .invoice-a4.invoice-report-1 .footer-total-row {
+              grid-template-columns: minmax(0, 1fr) 2mm 28mm;
+              min-height: 3.2mm;
+              font-size: 9px;
+            }
+            .invoice-a4.invoice-report-1 .grand-total-row {
+              grid-template-columns: minmax(0, 1fr) 2mm 30mm;
+              font-size: 10px;
+            }
+            .invoice-report-1 .crystal-table td.number { white-space: nowrap; }
+
+            /* Report 1 uses the same saved font scale as Report 2. */
+            .invoice-a4.invoice-report-1 { font-size: calc(10px * var(--invoice-font-scale, 1.5)); }
+            .invoice-a5.invoice-report-1 { font-size: calc(8px * var(--invoice-font-scale, 1.5)); }
+            .invoice-report-1 .firm-name { font-size: 1.5em; }
+            .invoice-report-1 .tax-heading { font-size: 1.3em; }
+            .invoice-report-1 .party-heading { font-size: .9em; }
+            .invoice-report-1 .party-name { font-size: 1em; }
+            .invoice-report-1 .crystal-table th,
+            .invoice-report-1 .crystal-table td { font-size: .8em; }
+            .invoice-a4.invoice-report-1 .crystal-table th,
+            .invoice-a4.invoice-report-1 .crystal-table td { font-size: .8em; }
+            .invoice-a5.invoice-report-1 .crystal-table th,
+            .invoice-a5.invoice-report-1 .crystal-table td { font-size: max(8.5px, .9em); }
+            .invoice-report-1 .invoice-quick-totals { font-size: .8em; }
+            .invoice-report-1 .invoice-bottom { font-size: calc(8px * var(--invoice-font-scale, 1.5)); }
+            .invoice-report-1 .footer-detail-row,
+            .invoice-report-1 .footer-total-row,
+            .invoice-report-1 .format-one-terms,
+            .invoice-report-1 .tax-summary-table { font-size: inherit; line-height: 1.35; }
+            .invoice-report-1 .footer-detail-row,
+            .invoice-report-1 .footer-total-row { min-height: 4mm; }
+            .invoice-report-1 .grand-total-row { font-size: 1.1em; }
+            .invoice-report-1 .invoice-footer-closing { font-size: 1em; }
+            .invoice-report-1 .format-one-terms {
+              width: 100%;
+              min-width: 0;
+              margin-top: .5mm;
+              padding: .7mm 1.5mm 0;
+              white-space: normal;
+              overflow-wrap: break-word;
+              word-break: normal;
+            }
+            .invoice-report-1 .format-one-terms b { white-space: nowrap; }
+            .invoice-report-1 .footer-tax-column {
+              display: flex;
+              flex-direction: column;
+            }
+            .invoice-report-1 .format-one-bank-details {
+              display: flex;
+              align-items: center;
+              gap: 2mm;
+              width: 100%;
+              margin: .5mm 0 0;
+              padding: .7mm 1.5mm 0;
+            }
+            .invoice-report-1 .format-one-bank-details .bank-details-content {
+              display: flex;
+              flex: 1 1 auto;
+              align-items: baseline;
+              gap: 2.5mm;
+              min-width: 0;
+              white-space: nowrap;
+            }
+            .invoice-report-1 .format-one-bank-details .footer-section-heading {
+              flex: 0 0 auto;
+              margin: 0;
+            }
+            .invoice-report-1 .format-one-bank-details .footer-detail-row {
+              display: inline-flex;
+              gap: .5mm;
+              min-height: 0;
+              padding: 0;
+              white-space: nowrap;
+            }
+            .invoice-report-1 .format-one-bank-details .bank-qr-code {
+              flex: 0 0 auto;
+              grid-column: auto;
+              grid-row: auto;
+              transform: none;
+            }
+            .invoice-a5.invoice-report-1 .format-one-terms {
+              margin-top: .3mm;
+              padding: .4mm 1mm 0;
+              line-height: 1.2;
+            }
+            .invoice-a5.invoice-report-1 .format-one-bank-details {
+              gap: 1.2mm;
+              margin-top: .3mm;
+              padding: .4mm 1mm 0;
+            }
+            .invoice-a5.invoice-report-1 .format-one-bank-details .bank-details-content {
+              justify-content: space-between;
+              gap: 1.2mm;
+            }
+
+            /* Report 2: compact dot-matrix style tax invoice. */
+            .invoice-report-2 { font-family: Arial, Helvetica, sans-serif; padding: 3mm 4mm; font-size: calc(7.5px * var(--r2-font-scale, 1)); line-height: 1.25; }
+            .invoice-report-2, .invoice-report-2 * { font-family: Arial, Helvetica, sans-serif !important; }
+            .r2-header { display: grid; grid-template-columns: 35% 36% 29%; min-height: 34mm; padding: 0 2mm 1mm; }
+            .r2-from, .r2-to { display: flex; flex-direction: column; gap: .7mm; padding-right: 3mm; }
+            .r2-from > strong, .r2-to > strong { font-size: 1.08em; text-transform: uppercase; }
+            .r2-invoice { position: relative; padding-left: 2mm; }
+            .r2-invoice h1 { margin: 0 18mm 1.2mm 0; text-align: center; font-size: 2em; line-height: 1; white-space: nowrap; }
+            .r2-page-no { position: absolute; top: .5mm; right: 0; font-size: .8em; white-space: nowrap; }
+            .r2-invoice > div:not(.r2-page-no) { display: grid; grid-template-columns: 15mm 2mm 1fr; min-height: 3.7mm; }
+            .r2-registrations { display: grid; grid-template-columns: 35% 65%; min-height: 12mm; padding: 1mm 2mm; border-bottom: 1px dashed #333; line-height: 1.8; }
+            .r2-registrations > div:last-child { padding-left: 2mm; }
+            .r2-items { min-height: 58mm; border-bottom: 1px dashed #333; }
+            .r2-items table, .r2-tax table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+            .r2-items th { height: 10mm; padding: .5mm .35mm; border-bottom: 1px dashed #333; font-size: 1em; font-weight: 400; text-align: center; vertical-align: middle; }
+            .r2-items td { height: 4.2mm; padding: .45mm .5mm; overflow: hidden; text-overflow: ellipsis; text-align: right; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums; }
+            .r2-items td.center { text-align: center !important; }
+            .r2-items .r2-product { padding-left: 1mm; text-align: left !important; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
+            .invoice-report-2 .r2-items th:first-child,
+            .invoice-report-2 .r2-items td:first-child { text-align: center; }
+            .invoice-report-2 .r2-items th:nth-child(2) {
+              padding-left: 1mm;
+              text-align: left;
+            }
+            .invoice-report-2 .r2-items th:nth-child(3) { text-align: center; }
+            .invoice-report-2 .r2-items th:nth-child(n+4) {
+              padding-right: .8mm;
+              text-align: right;
+            }
+            .r2-bottom { display: grid; grid-template-columns: 47% 25% 28%; min-height: 37mm; padding: 1mm 2mm 0; }
+            .r2-tax { padding-right: 5mm; }
+            .r2-tax th, .r2-tax td { height: 4mm; padding: .25mm .6mm; text-align: right; font-weight: 400; }
+            .r2-tax thead th { border-bottom: 1px dashed #555; font-weight: 700; text-align: center; }
+            .r2-adjustments, .r2-totals { padding-left: 2mm; }
+            .r2-adjustments > div, .r2-totals > div { display: grid; grid-template-columns: 1fr 2mm 18mm; min-height: 4mm; }
+            .r2-adjustments span, .r2-totals span, .r2-totals strong:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+            .r2-footer { display: grid; grid-template-columns: 1fr 36%; align-items: center; min-height: 8mm; padding: 1mm 2mm 0; border-top: 1px dashed #333; }
+            .r2-footer > strong { text-align: center; }
+            .r2-terms {
+              grid-column: 1 / -1;
+              min-width: 0;
+              padding-top: .8mm;
+              white-space: normal;
+              overflow-wrap: anywhere;
+              line-height: 1.3;
+            }
+            .invoice-a4.invoice-report-2 .r2-items { min-height: 139mm; }
+            .invoice-a4.invoice-report-2 .r2-bottom { min-height: 55mm; align-items: start; padding-bottom: 2mm; }
+            .invoice-a5.invoice-report-2 { font-size: calc(7px * var(--r2-font-scale, 1)); }
+            .invoice-a5.invoice-report-2 .r2-header { min-height: 25mm; }
+            .invoice-a5.invoice-report-2 .r2-registrations { min-height: 9mm; }
+            .invoice-a5.invoice-report-2 .r2-items { min-height: 48mm; }
+            .invoice-a5.invoice-report-2 .r2-items th { height: 7mm; font-size: 1em; }
+            .invoice-a5.invoice-report-2 .r2-items td { height: 3.4mm; font-size: 1em; }
+            .invoice-a5.invoice-report-2 .r2-bottom { min-height: 30mm; }
+            .invoice-a5.invoice-report-2 .r2-adjustments > div,
+            .invoice-a5.invoice-report-2 .r2-totals > div { min-height: 3mm; }
+            .invoice-a5.invoice-report-2 .r2-footer { min-height: 12mm; font-size: 6.5px; }
+            .invoice-a5.invoice-report-2 .r2-terms { padding-top: .5mm; line-height: 1.2; }
+
+            /* Report 2: consistent typography and bottom-aligned footer. */
+            .invoice-report-2 {
+              display: flex;
+              flex-direction: column;
+            }
+            .invoice-report-2 .r2-header { font-size: 10px; }
+            .invoice-report-2 .r2-items th,
+            .invoice-report-2 .r2-items td { font-size: 9.5px; }
+            .invoice-report-2 .r2-bottom,
+            .invoice-report-2 .r2-footer { font-size: 10px; }
+            .invoice-report-2 .r2-footer { margin-top: auto; }
+
+            /* Report 3: reference landscape GST invoice; table sizes match Report 2. */
+            .invoice-report-3 { width: 287mm; min-height: 200mm; padding: 4mm; font-family: Arial, Helvetica, sans-serif; font-size: calc(7.5px * var(--r3-font-scale, 1)); line-height: 1.25; }
+            .invoice-report-3, .invoice-report-3 * { font-family: Arial, Helvetica, sans-serif !important; }
+            .r3-header { display: grid; grid-template-columns: 38% 23% 39%; min-height: 42mm; padding: 1mm 2mm 2mm; column-gap: 4mm; }
+            .r3-details { display: flex; min-width: 0; flex-direction: column; gap: .7mm; }
+            .r3-details > div { display: grid; grid-template-columns: 25mm minmax(0, 1fr); align-items: start; min-height: 3.5mm; column-gap: 2mm; }
+            .r3-details > div > span { white-space: nowrap; }
+            .r3-details > div > b, .r3-details > div > strong { min-width: 0; overflow-wrap: anywhere; }
+            .r3-details strong { text-transform: uppercase; }
+            .r3-details p { min-width: 0; min-height: 8mm; margin: 0; overflow-wrap: anywhere; }
+            .r3-details p div { margin-bottom: .5mm; }
+            .r3-customer { padding-left: 2mm; }
+            .r3-invoice-meta { padding: 3mm 3mm 0; }
+            .r3-invoice-meta h1 { margin: 0 0 5mm; text-align: center; font-size: 1.2em; }
+            .r3-invoice-meta > div { display: grid; grid-template-columns: 22mm minmax(0, 1fr); min-height: 4mm; column-gap: 2mm; }
+            .r3-invoice-meta p { margin: 3mm 0 0; text-align: center; }
+            .r3-items { min-height: 118mm; border-top: 1px solid #222; border-bottom: 1px solid #222; }
+            .r3-items table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+            .r3-items th { height: 8mm; padding: .8mm .7mm; border-right: 1px solid #aaa; border-bottom: 1px solid #222; font-weight: 700; line-height: 1.15; text-align: center; vertical-align: middle; white-space: normal; }
+            .r3-items th:first-child { text-align: left; }
+            .r3-items th:last-child { border-right: 0; }
+            .r3-items td { height: 5mm; padding: .7mm .7mm; overflow: hidden; border-right: 1px solid #ddd; text-overflow: ellipsis; text-align: right; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums; }
+            .r3-items td:last-child { border-right: 0; }
+            .r3-items td.center { text-align: center !important; }
+            .r3-items .r3-product { text-align: left !important; }
+            .r3-footer { display: grid; grid-template-columns: 20% 48% 32%; min-height: 35mm; padding: 3mm 3mm 1mm; column-gap: 5mm; }
+            .r3-qr { display: flex; align-items: flex-start; justify-content: center; min-width: 0; }
+            .r3-qr img { width: 28mm; height: 28mm; object-fit: contain; }
+            .r3-notes { min-width: 0; padding-right: 3mm; border-right: 1px solid #bbb; }
+            .r3-adjustments { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1mm 6mm; margin-bottom: 2mm; }
+            .r3-adjustments > div { display: grid; grid-template-columns: minmax(0, 1fr) 20mm; align-items: baseline; column-gap: 2mm; }
+            .r3-adjustments b { text-align: right; font-variant-numeric: tabular-nums; }
+            .r3-bank { margin-bottom: 1.5mm; line-height: 1.5; }
+            .r3-bank strong { display: inline-block; min-width: 18mm; margin-right: 1.5mm; }
+            .r3-bank span { margin-right: 4mm; overflow-wrap: anywhere; }
+            .r3-terms { margin: 0; line-height: 1.45; }
+            .r3-totals { min-width: 0; padding-left: 2mm; }
+            .r3-totals > div { display: grid; grid-template-columns: minmax(0, 1fr) 27mm; align-items: baseline; min-height: 4.2mm; column-gap: 3mm; }
+            .r3-totals b, .r3-totals > div > strong:last-child { text-align: right; }
+            .r3-totals .r3-net { margin-top: 1mm; padding-top: 1mm; border-top: 1px solid #777; font-size: 1.08em; }
+            .r3-totals p { margin: 2mm 0 0; text-align: center; }
+            .invoice-a4.invoice-report-3 .r3-items th,
+            .invoice-a4.invoice-report-3 .r3-items td { font-size: 11px; }
+            .invoice-a4.invoice-report-3 {
+              display: flex;
+              width: 196mm;
+              height: 283mm;
+              min-height: 283mm;
+              flex-direction: column;
+              padding: 4mm 5mm;
+            }
+            .invoice-a4.invoice-report-3 .r3-items {
+              min-height: 108mm;
+              flex: 1 1 auto;
+            }
+            .invoice-a4.invoice-report-3 .r3-footer {
+              width: 100%;
+              grid-template-columns: 14% minmax(0, 1fr) 30%;
+              margin-top: auto;
+              padding-right: 1.5mm;
+              padding-left: 1.5mm;
+              column-gap: 2mm;
+            }
+            .invoice-a4.invoice-report-3 .r3-notes { padding-right: 2mm; }
+            .invoice-a4.invoice-report-3 .r3-totals {
+              min-width: 0;
+              padding-left: 1mm;
+            }
+            .invoice-a4.invoice-report-3 .r3-totals > div {
+              grid-template-columns: minmax(0, 1fr) 24mm;
+              column-gap: 1.5mm;
+            }
+            .invoice-a5.invoice-report-3 {
+              display: flex;
+              width: 200mm;
+              height: 138mm;
+              min-height: 138mm;
+              flex-direction: column;
+              padding: 3mm 4mm;
+              font-size: calc(7px * var(--r3-font-scale, 1));
+            }
+            .invoice-a5.invoice-report-3 .r3-header { min-height: 31mm; padding: .5mm 1mm 1mm; column-gap: 2mm; }
+            .invoice-a5.invoice-report-3 .r3-details { gap: .35mm; }
+            .invoice-a5.invoice-report-3 .r3-details > div { grid-template-columns: 18mm minmax(0, 1fr); min-height: 2.5mm; column-gap: 1mm; }
+            .invoice-a5.invoice-report-3 .r3-details p { min-height: 4mm; }
+            .invoice-a5.invoice-report-3 .r3-invoice-meta { padding: 2mm 2mm 0; }
+            .invoice-a5.invoice-report-3 .r3-invoice-meta h1 { margin-bottom: 2.5mm; }
+            .invoice-a5.invoice-report-3 .r3-invoice-meta > div { grid-template-columns: 17mm 1fr; min-height: 3mm; }
+            .invoice-a5.invoice-report-3 .r3-invoice-meta p { margin-top: 1.5mm; }
+            .invoice-a5.invoice-report-3 .r3-items {
+              min-height: 51mm;
+              flex: 1 1 auto;
+            }
+            .invoice-a5.invoice-report-3 .r3-items th { height: 6mm; padding: .4mm .25mm; }
+            .invoice-a5.invoice-report-3 .r3-items td { height: 3.6mm; }
+            .invoice-a5.invoice-report-3 .r3-items th,
+            .invoice-a5.invoice-report-3 .r3-items td { font-size: 9.5px; }
+            .invoice-a5.invoice-report-3 .r3-header { font-size: 10px; }
+            .invoice-a5.invoice-report-3 .r3-footer { font-size: 9.5px; }
+            .invoice-a5.invoice-report-3 .r3-footer {
+              min-height: 28mm;
+              margin-top: auto;
+              padding: 1.5mm 1.5mm 0;
+              column-gap: 2mm;
+            }
+            .invoice-a5.invoice-report-3 .r3-qr img { width: 23mm; height: 23mm; }
+            .invoice-a5.invoice-report-3 .r3-adjustments { gap: .5mm 2mm; margin-bottom: .8mm; }
+            .invoice-a5.invoice-report-3 .r3-adjustments > div { grid-template-columns: minmax(0, 1fr) 13mm; column-gap: .7mm; }
+            .invoice-a5.invoice-report-3 .r3-bank { margin-bottom: .7mm; line-height: 1.25; }
+            .invoice-a5.invoice-report-3 .r3-bank strong { min-width: 14mm; margin-right: .7mm; }
+            .invoice-a5.invoice-report-3 .r3-bank span { margin-right: 1.5mm; }
+            .invoice-a5.invoice-report-3 .r3-terms { line-height: 1.25; }
+            .invoice-a5.invoice-report-3 .r3-totals > div { grid-template-columns: minmax(0, 1fr) 19mm; min-height: 3mm; column-gap: 1mm; }
+
+            /* Overflow-safe numeric widths for both reports and paper sizes. */
+            .invoice-report-1 .crystal-table td.number,
+            .invoice-report-1 .crystal-table td.center,
+            .invoice-report-2 .r2-items td,
+            .invoice-report-2 .r2-tax td,
+            .invoice-report-2 .r2-totals span,
+            .invoice-report-2 .r2-totals strong {
+              font-variant-numeric: tabular-nums;
+              letter-spacing: -0.05px;
+            }
+            .invoice-a4.invoice-report-1 .crystal-table td.number,
+            .invoice-a4.invoice-report-1 .crystal-table td.center { font-size: .8em; }
+            .invoice-a5.invoice-report-1 .crystal-table td.number,
+            .invoice-a5.invoice-report-1 .crystal-table td.center { font-size: max(8.5px, .9em); }
+            .invoice-a4.invoice-report-2 .r2-items th,
+            .invoice-a4.invoice-report-2 .r2-items td { font-size: 9.5px; }
+            .invoice-a5.invoice-report-2 .r2-items th,
+            .invoice-a5.invoice-report-2 .r2-items td { font-size: 9.5px; }
+
+            /* Compact A5 Format 1 sections so ten rows and summary fit. */
+            .invoice-a5.invoice-report-1 .report-top { min-height: 20mm; }
+            .invoice-a5.invoice-report-1 .party-grid { min-height: 20mm; }
+            .invoice-a5.invoice-report-1 .invoice-footer-summary-grid { min-height: 20mm; }
+
+            /*
+             * Unique A5 — matched to the distributor's landscape invoice.
+             * All physical measurements use mm so the preview and printed
+             * sheet use the same hierarchy, margins and readable body type.
+             */
+            .invoice-a5.invoice-report-unique_a5 {
+              display: grid;
+              grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+              width: 200mm;
+              height: 138mm;
+              min-height: 138mm;
+              max-height: 138mm;
+              padding: 3mm 4mm;
+              overflow: hidden;
+              font: 7.6px/1.18 Arial, Helvetica, sans-serif;
+              letter-spacing: 0;
+            }
+            .invoice-report-unique_a5,
+            .invoice-report-unique_a5 * {
+              font-family: "Arial Narrow", Arial, Helvetica, sans-serif !important;
+              color: #000;
+            }
+            .invoice-report-unique_a5 b,
+            .invoice-report-unique_a5 strong,
+            .invoice-report-unique_a5 th { font-weight: 700; }
+            .unique-header {
+              display: grid;
+              grid-template-columns: minmax(0, 62%) minmax(0, 38%);
+              min-height: 22mm;
+              border-bottom: .3mm solid #000;
+            }
+            .unique-firm { min-width: 0; padding: .4mm 2mm .9mm 0; }
+            .unique-firm > strong {
+              display: block;
+              margin-bottom: .45mm;
+              font-size: 10.5px;
+              line-height: 1.05;
+              text-transform: uppercase;
+            }
+            .unique-address { min-width: 0; line-height: 1.15; overflow-wrap: anywhere; }
+            .unique-inline {
+              display: flex;
+              flex-wrap: wrap;
+              gap: .35mm 2.2mm;
+              margin-top: .35mm;
+              line-height: 1.1;
+            }
+            .unique-meta {
+              min-width: 0;
+              padding: .35mm 0 .8mm 2mm;
+              border-left: .2mm solid #000;
+            }
+            .unique-meta > strong {
+              display: block;
+              margin-bottom: .55mm;
+              font-size: 11px;
+              line-height: 1.05;
+              letter-spacing: .25mm;
+              text-align: center;
+            }
+            .unique-meta > div {
+              display: grid;
+              grid-template-columns: 18mm 1.8mm minmax(0, 1fr);
+              min-height: 2.85mm;
+              align-items: baseline;
+              column-gap: .5mm;
+            }
+            .unique-meta em {
+              min-width: 0;
+              overflow-wrap: anywhere;
+              font-style: normal;
+              font-weight: 700;
+            }
+            .unique-party {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+              gap: 3mm;
+              min-height: 20mm;
+              padding: .8mm 0;
+              border-bottom: .2mm solid #000;
+            }
+            .unique-party-card { min-width: 0; line-height: 1.13; }
+            .unique-party-card > b {
+              display: block;
+              margin-bottom: .4mm;
+              padding-bottom: .35mm;
+              border-bottom: .2mm solid #000;
+              font-size: 7.8px;
+              text-transform: uppercase;
+            }
+            .unique-party-card > strong {
+              display: block;
+              margin-bottom: .3mm;
+              font-size: 8.4px;
+              line-height: 1.08;
+              text-transform: uppercase;
+            }
+            .unique-party-card > div { overflow-wrap: anywhere; }
+            .unique-route-meta {
+              display: grid;
+              grid-template-columns: 1.2fr 1fr 1.25fr 1.15fr;
+              align-items: center;
+              min-height: 4.5mm;
+              column-gap: 1.5mm;
+              padding: .45mm 0;
+              border-bottom: .3mm solid #000;
+              font-size: 7.25px;
+            }
+            .unique-route-meta span { min-width: 0; overflow-wrap: anywhere; }
+            .unique-items {
+              min-height: 0;
+              padding: 0;
+              overflow: hidden;
+            }
+            .unique-items table {
+              width: 100%;
+              border-spacing: 0;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+            .unique-items thead { display: table-header-group; }
+            .unique-items th,
+            .unique-items td {
+              padding: .45mm .2mm;
+              border-right: .15mm solid #555;
+              border-bottom: .15mm solid #555;
+              overflow: hidden;
+              text-align: right;
+              vertical-align: middle;
+              font-size: 6.75px;
+              line-height: 1.06;
+              font-variant-numeric: tabular-nums;
+              white-space: nowrap;
+            }
+            .unique-items th:last-child,
+            .unique-items td:last-child { border-right: 0; }
+            .unique-items th {
+              height: 5.9mm;
+              padding: .3mm .15mm;
+              border-top: 0;
+              border-bottom: .3mm solid #000;
+              text-align: center;
+              vertical-align: middle;
+              font-size: 6.65px;
+              line-height: 1.02;
+              white-space: normal;
+            }
+            .unique-items td { height: 4.05mm; }
+            .unique-items td:first-child,
+            .unique-items td:nth-child(5),
+            .unique-items td:nth-child(6),
+            .unique-items td:nth-child(7),
+            .unique-items td:nth-child(12) { text-align: center; }
+            .unique-items td.unique-product {
+              padding-left: .5mm;
+              text-align: left;
+              white-space: normal;
+              overflow-wrap: anywhere;
+              line-height: 1.08;
+            }
+            .unique-footer {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 43mm;
+              align-items: stretch;
+              gap: 1.5mm;
+              min-height: 37mm;
+              padding-top: 1mm;
+              border-top: .3mm solid #000;
+              font-size: 7.1px;
+              line-height: 1.16;
+            }
+            .unique-footer.has-qr { grid-template-columns: minmax(0, 1fr) 22mm 43mm; }
+            .unique-footer-notes { min-width: 0; padding-right: .8mm; }
+            .unique-words { margin-bottom: .65mm; font-size: 7.35px; }
+            .unique-bank { margin-bottom: .65mm; overflow-wrap: anywhere; }
+            .unique-terms { line-height: 1.2; overflow-wrap: anywhere; }
+            .unique-signature {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+              min-height: 8.5mm;
+              padding-top: 1.5mm;
+            }
+            .unique-signature span { padding-top: .7mm; border-top: .2mm solid #000; }
+            .unique-signature strong { align-self: flex-end; text-align: right; }
+            .unique-gst-note { margin-top: .8mm; font-size: 6.45px; font-style: italic; }
+            .unique-qr {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: flex-start;
+              min-width: 0;
+              padding-top: .3mm;
+              font-size: 6.25px;
+            }
+            .unique-qr img {
+              width: 20mm;
+              height: 20mm;
+              object-fit: contain;
+              image-rendering: auto;
+            }
+            .unique-qr span { margin-top: .25mm; }
+            .unique-totals {
+              min-width: 0;
+              padding-left: 1.3mm;
+              border-left: .2mm solid #000;
+            }
+            .unique-totals > div {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 20mm;
+              align-items: baseline;
+              min-height: 2.75mm;
+              column-gap: 1mm;
+            }
+            .unique-totals > div > b,
+            .unique-totals > div > strong:last-child {
+              text-align: right;
+              font-variant-numeric: tabular-nums;
+              white-space: nowrap;
+            }
+            .unique-net-total {
+              margin-top: .45mm;
+              padding-top: .65mm;
+              border-top: .3mm solid #000;
+              font-size: 8.25px;
+            }
+
+            /* Unique A5: positions and horizontal rules of the supplied bill. */
+            .invoice-a5.invoice-report-unique_a5 {
+              display: flex;
+              flex-direction: column;
+              height: auto;
+              min-height: 138mm;
+              max-height: none;
+              padding: 2mm 3mm;
+              overflow: visible;
+              font: 8px/1.16 "Courier New", monospace;
+            }
+            .invoice-report-unique_a5, .invoice-report-unique_a5 * {
+              font-family: "Courier New", monospace !important;
+            }
+            .unique-header {
+              grid-template-columns: 70% 30%;
+              min-height: 20mm;
+              border: 0;
+            }
+            .unique-firm { padding: 0 2mm 0 0; }
+            .unique-firm > strong { font-size: 11px; margin-bottom: .4mm; }
+            .unique-meta { padding: 0 0 0 1mm; border: 0; }
+            .unique-meta > strong { font-size: 12px; letter-spacing: 0; text-align: left; margin-bottom: 1mm; }
+            .unique-meta > div { grid-template-columns: 20mm 2mm 1fr; min-height: 2.7mm; gap: .4mm; }
+            .unique-firm-gstin {
+              border-top: .2mm dashed #000;
+              text-align: center;
+              font-weight: bold;
+              min-height: 3mm;
+              padding-top: .35mm;
+            }
+            .unique-party {
+              grid-template-columns: minmax(0, 1fr) 26mm minmax(0, 1fr);
+              gap: 2mm;
+              min-height: 24mm;
+              padding: .3mm 0 0;
+              border: 0;
+            }
+            .unique-party-card { font-size: 8px; line-height: 1.15; }
+            .unique-party-card > strong { font-size: 8px; margin: 0; }
+            .unique-party-qr { display: flex; align-items: center; justify-content: center; }
+            .unique-party-qr img { width: 24mm; height: 24mm; object-fit: contain; }
+            .unique-salesman { text-align: center; min-height: 3mm; }
+            .unique-items { flex: 1 0 34mm; overflow: visible; border-top: .2mm solid #000; }
+            .unique-items th, .unique-items td {
+              height: auto;
+              padding: .4mm .15mm;
+              border: 0;
+              font-size: 7.2px;
+              line-height: 1.13;
+              vertical-align: top;
+              overflow: visible;
+              white-space: normal;
+              overflow-wrap: anywhere;
+            }
+            .unique-items th { height: 4mm; border-bottom: .2mm solid #000; font-weight: normal; text-align: center; }
+            .unique-items th:nth-child(2), .unique-items td.unique-product { text-align: left; }
+            .unique-items td:first-child, .unique-items td:nth-child(6),
+            .unique-items td:nth-child(7), .unique-items td:nth-child(8),
+            .unique-items td:nth-child(13) { text-align: center; }
+            .unique-footer {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 51mm;
+              gap: 0 2mm;
+              min-height: 37mm;
+              padding: 0;
+              border: 0;
+              font-size: 8px;
+              line-height: 1.15;
+            }
+            .unique-discounts {
+              grid-column: 1 / -1;
+              grid-row: 1;
+              display: flex;
+              justify-content: space-between;
+              gap: 1mm;
+              padding: .6mm 0;
+              border-top: .2mm solid #000;
+              border-bottom: .2mm solid #000;
+              font-size: 7.5px;
+            }
+            .unique-discounts span { white-space: nowrap; }
+            .unique-bank { grid-column: 1 / -1; grid-row: 2; margin: .5mm 0; overflow-wrap: anywhere; }
+            .unique-footer-notes { grid-column: 1; grid-row: 3; padding: 0; }
+            .unique-declaration { margin-top: .5mm; }
+            .unique-fssai { margin-top: 1mm; }
+            .unique-signature { min-height: 4mm; padding: .8mm 0 0; }
+            .unique-signature strong { text-align: left; }
+            .unique-totals { grid-column: 2; grid-row: 3; padding: 0; border: 0; }
+            .unique-totals > div { grid-template-columns: minmax(0, 1fr) 24mm; min-height: 2.7mm; gap: .5mm; }
+            .unique-totals > div > :last-child { text-align: right; white-space: nowrap; }
+            .unique-net-total { margin-top: .4mm; padding: 0; border: 0; font-size: 9px; }
+            .unique-gst-note { grid-column: 1 / -1; grid-row: 4; margin-top: 1mm; text-align: center; font: 9px Arial, sans-serif !important; }
+
+            @media print {
+              html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .invoice-preview-toolbar { display: none !important; }
+              .preview-shell { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              .invoice-page { margin: 0 auto !important; box-shadow: none !important; }
+              /* Keep monetary and quantity values legible on the physical invoice. */
+              .invoice-a4 .crystal-table td.number { font-size: 9.5px; font-weight: 600; }
+              .invoice-a4 .invoice-quick-totals strong,
+              .invoice-a4 .footer-total-row strong,
+              .invoice-a4 .tax-summary-table .number { font-size: 8.5px; font-weight: 700; }
+              .invoice-a5 .crystal-table td.number { font-size: 7.5px; font-weight: 600; }
+              .invoice-a5 .invoice-quick-totals strong,
+              .invoice-a5 .footer-total-row strong,
+              .invoice-a5 .tax-summary-table .number { font-size: 7px; font-weight: 700; }
+              .invoice-a4.invoice-report-1 .crystal-table td.number { font-size: .8em; }
+              .invoice-a5.invoice-report-1 .crystal-table td.number { font-size: max(8.5px, .9em); }
+              .invoice-report-1 .invoice-quick-totals strong,
+              .invoice-report-1 .footer-total-row strong,
+              .invoice-report-1 .tax-summary-table .number { font-size: inherit; }
+
+              /* Keep every A5 invoice format and its footer on one sheet. */
+              .invoice-a5 {
+                width: 200mm !important;
+                height: 138mm !important;
+                min-height: 138mm !important;
+                max-height: 138mm !important;
+                overflow: hidden !important;
+                break-inside: avoid-page !important;
+                page-break-inside: avoid !important;
+              }
+              /* The Unique A5 template paginates its item rows itself. Keep
+                 each generated page at the exact A5 printable dimensions. */
+              .invoice-a5.invoice-report-unique_a5 {
+                height: auto !important;
+                min-height: 138mm !important;
+                max-height: none !important;
+                overflow: visible !important;
+                break-inside: auto !important;
+                page-break-inside: auto !important;
+              }
+              .invoice-a5.invoice-report-1 .party-grid { min-height: 22mm; }
+              .invoice-a5.invoice-report-1 .invoice-footer-summary-grid { min-height: 22mm; }
+              .invoice-a5.invoice-report-1 .format-one-bank-details { margin-bottom: .5mm; }
+              .invoice-a5.invoice-report-1 .format-one-terms { margin-top: .4mm; line-height: 1.2; }
+              .invoice-a5.invoice-report-2 .r2-items { min-height: 42mm; }
+              .invoice-a5.invoice-report-2 .r2-bottom { min-height: 27mm; }
+              .invoice-a5.invoice-report-2 .r2-footer { min-height: 9mm; }
+              .invoice-a5.invoice-report-3 .r3-items { min-height: 51mm; }
+              .invoice-a5.invoice-report-3 .r3-footer { min-height: 25mm; }
+
+              .report-top, .party-grid, .items-wrap, .invoice-bottom, .invoice-footer-summary-grid, .item-row {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        <style>
+  html,body { width:210mm; height:148mm; margin:0; padding:0; background:white; }
+  .preview-shell { width:210mm; height:148mm; padding:5mm; background:white; }
+  .invoice-page { margin:0 !important; }
+</style></head>
+
+        <body>
+          
+
+          <div class="preview-shell">
+            
+        <main class="invoice-page invoice-a5 invoice-report-unique_a5">
+          
+          <header class="unique-header">
+            <section class="unique-firm">
+              <strong>UNIQUE ENTERPRISES</strong>
+              <div class="unique-address"><div>GODOWN NO 2, S NO 15/1, MILKAT NO. 1008</div><div>NIMBHALKAR GUJARWADI ROAD</div><div>PUNE - 411046</div></div>
+              <div>State : MAHARASHTRA &nbsp; State Code: 27</div>
+              <div>Ph : 9209383847</div>
+            </section>
+            <section class="unique-meta">
+              <strong>TAX-INVOICE</strong>
+              <div><span>INVOICE NO</span><span>:</span><span>UE-2</span></div>
+              <div><span>INVOICE DATE</span><span>:</span><span>26/11/2026</span></div>
+              <div><span>BEAT</span><span>:</span><span>ALL</span></div>
+              
+            </section>
+          </header>
+          <div class="unique-firm-gstin">FIRM GSTIN 27GGJPB5187G1Z5</div>
+          <section class="unique-party">
+            <div class="unique-party-card">
+              <div>Details of Receiver (Billed to)</div>
+              <strong>VIJAY TRADING COM (KONDWA)</strong>
+              <div class="unique-address"><div>OPP KONARK PURAM</div><div>KONDWA - 411048</div></div>
+              <div>STATE: MAHARASHTRA &nbsp; STATE CODE:27</div>
+              <div><b>GSTIN/UNIQUE ID : 27AAKFV4136A1ZC</b></div>
+              <div>Phone: -</div>
+            </div>
+            <div class="unique-party-qr"></div>
+            <div class="unique-party-card">
+              <div>Details of Consignee (Shipped to)</div>
+              <strong>VIJAY TRADING COM (KONDWA)</strong>
+              <div class="unique-address"><div>OPP KONARK PURAM</div><div>KONDWA - 411048</div></div>
+              <div>STATE: MAHARASHTRA &nbsp; STATE CODE:27</div>
+              <div><b>GSTIN/UNIQUE ID : 27AAKFV4136A1ZC</b></div>
+            </div>
+          </section>
+          <div class="unique-salesman"><b>Salesman:</b> VILAS 7219323616</div>
+          <section class="unique-items">
+            <table>
+              <colgroup>
+                <col style="width:3%"><col style="width:17%"><col style="width:7%"><col style="width:5%"><col style="width:5%"><col style="width:4%"><col style="width:4%"><col style="width:3%"><col style="width:5.5%"><col style="width:5.5%"><col style="width:5%"><col style="width:8%"><col style="width:4%"><col style="width:6%"><col style="width:6%"><col style="width:7%">
+              </colgroup>
+              <thead><tr><th>SR</th><th>Product Name</th><th>HSN</th><th>OldMrp</th><th>MRP</th><th>Unit</th><th>Qty</th><th>Fr.</th><th>Rate</th><th>Disc</th><th>CD</th><th>Taxable</th><th>GST%</th><th>CGST</th><th>SGST</th><th>Net Amt</th></tr></thead>
+              <tbody><tr><td>1</td><td class="unique-product">TATA SALT POWDER 30 X 1 KG (MRP 34)</td><td>25010010</td><td>-</td><td>34.00</td><td>PCS</td><td>9,000</td><td>0</td><td>28.67</td><td>0.00</td><td>3.00</td><td>2,58,000.00</td><td>-</td><td>0.00</td><td>0.00</td><td>2,58,000.00</td></tr></tbody>
+            </table>
+          </section>
+          <footer class="unique-footer">
+            <div class="unique-discounts"><span><b>GROSS AMT :</b> 2,58,003.00</span><span><b>SCHEME DISC :</b> 0.00</span><span><b>CASH DISC :</b> 3.00</span><span><b>STAR DISC :</b> 0.00</span></div>
+            
+            <div class="unique-footer-notes">
+              <div><b>Total Value (In Words) RS. Two Lakh Fifty Eight Thousand Rupees Only</b></div>
+              <div class="unique-declaration">Declaration: Certified that the particulars given above are true<br>and correct and the amount indicated.</div>
+              <div class="unique-fssai"><b>FSSAI No : &nbsp; -</b></div>
+              <div class="unique-signature"><strong>FOR UNIQUE ENTERPRISES</strong><b>Receivers Stamp &amp; Sign.</b></div>
+              <div>Designation:</div>
+            </div>
+            <div class="unique-totals">
+              <div><b>TAXABLE AMT :</b><b>2,58,000.00</b></div>
+              <div><span>Sch/Cash</span><span>3.00</span></div>
+              <div><span>CGST AMT</span><span>0.00</span></div>
+              <div><span>SGST AMT</span><span>0.00</span></div>
+              
+              <div><span>CN/STAR/DIS:</span><span>0.00</span></div>
+              <div><span>ROUNDING :</span><span>0.00</span></div>
+              <div><span>TCS :</span><span>0.00</span></div>
+              <div class="unique-net-total"><strong>NET AMOUNT</strong><strong>2,58,000.00</strong></div>
+            </div>
+            <div class="unique-gst-note">Benefit of reduced GST rates to be passed to the end consumers</div>
+          </footer>
+        </main>
+          </div>
+        </body>
+      </html>
+    
