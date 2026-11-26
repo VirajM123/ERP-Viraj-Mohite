@@ -101,6 +101,7 @@ export default function SearchablePartySelect({ children, value = "", onChange, 
         className={index === active ? "active" : ""}
         key={`${option.value}-${index}`}
         style={option.style}
+        title={showOptionDetails ? option.detail : undefined}
         onMouseDown={(event) => event.preventDefault()}
         onMouseEnter={() => setActive(index)}
         onClick={() => choose(option)}

@@ -76628,26 +76628,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             </button>
                           </div>
 
-                          {invoiceFormData.party && (() => {
-                            const code = String(invoiceFormData.party).trim();
-                            const localAccount = accounts.find((account) => String(account.accountCode || account.code || '').trim() === code)
-                              || invoicePartyOptions.find((mapping) => String(mapping.accountCode || '').trim() === code)
-                              || {};
-                            const currentDetails = billingCustomerDetails.code === code ? billingCustomerDetails : null;
-                            const account = currentDetails?.customer || localAccount;
-                            const address = billingCustomerAddress(account) || billingCustomerAddress(localAccount);
-                            const gstNo = account.gstNo || account.GSTNo || account.GstNo || localAccount.gstNo || '';
-                            return (
-                              <div className="billing-customer-details" aria-live="polite">
-                                <div><strong>Address:</strong> {address || 'Not available'}</div>
-                                <div><strong>GST No:</strong> {gstNo || 'Not available'}</div>
-                                <div><strong>Outstanding:</strong> {currentDetails?.status === 'ready'
-                                  ? `₹${Number(currentDetails.outstanding).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                  : currentDetails?.status === 'error' ? 'Unavailable' : 'Loading…'}</div>
-                              </div>
-                            );
-                          })()}
-
                           {invoiceFormData.party &&
                             (() => {
                               const selectedAccount = accounts.find(
@@ -76839,6 +76819,25 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             readOnly={settleAdjustHeaderReadOnly}
                           />
                         </div>
+                        {invoiceFormData.party && (() => {
+                          const code = String(invoiceFormData.party).trim();
+                          const localAccount = accounts.find((account) => String(account.accountCode || account.code || '').trim() === code)
+                            || invoicePartyOptions.find((mapping) => String(mapping.accountCode || '').trim() === code)
+                            || {};
+                          const currentDetails = billingCustomerDetails.code === code ? billingCustomerDetails : null;
+                          const account = currentDetails?.customer || localAccount;
+                          const address = billingCustomerAddress(account) || billingCustomerAddress(localAccount);
+                          const gstNo = account.gstNo || account.GSTNo || account.GstNo || localAccount.gstNo || '';
+                          return (
+                            <div className="billing-customer-details" aria-live="polite" tabIndex={0}>
+                              <span className="billing-customer-address" title={address || 'Not available'}><strong>Address:</strong> {address || 'Not available'}</span>
+                              <span className="billing-customer-gst"><strong>GST No:</strong> {gstNo || 'Not available'}</span>
+                              <span className="billing-customer-outstanding"><strong>Outstanding:</strong> {currentDetails?.status === 'ready'
+                                ? `₹${Number(currentDetails.outstanding).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : currentDetails?.status === 'error' ? 'Unavailable' : 'Loading…'}</span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </section>
 
