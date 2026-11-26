@@ -2351,21 +2351,14 @@ const enforceTrustedSalesRates = async ({ req, items, distributorId, firmId, gdC
   const products = await Product.find({ distributorId, firmId, productCode: { $in: productCodes }, isActive: true }).session(session).lean();
   const stockByKey = new Map(stockRows.map((row) => [itemKey(row.ProdCode, row.Batch, row.MRP), row]));
   const productByCode = new Map(products.map((row) => [normalize(row.productCode).toUpperCase(), row]));
-  const overrideRequested = items.some((item) => {
-    const code = normalize(item.productCode || item.productId || item.code || String(item.product || "").split(" - ")[0]);
-    const stock = stockByKey.get(itemKey(code, item.batchNo || item.Batch || item.selectedBatch?.Batch, item.mrp ?? item.MRP ?? item.selectedBatch?.MRP));
-    const product = productByCode.get(code.toUpperCase());
-    const trusted = Number(stock?.SRate || product?.Rate_Per_Unit || 0);
-    const submitted = Number(item.rate ?? item.salesRate ?? item.SRate ?? 0);
-    return trusted <= 0 || Math.abs(submitted - trusted) > 0.001;
-  });
-  let overrideAllowed = false;
-  if (overrideRequested && generalSetup?.allowChangeSaleRate === true) {
-    overrideAllowed = await securityRouter.authorize(
-      distributorId, firmId, req.auth.userId, req.auth.role,
-      "SALES", "SALES_RATE_OVERRIDE", "edit"
-    );
-  }
+  // The sales-billing screen uses this General Setup setting to decide whether
+  // the Rate field can be edited. Keep the server-side rule identical so an
+  // enabled setting permits the edited rate to be saved as well. readSetupBoolean
+  // also supports legacy setup records that store this value as Y/YES/1/string.
+  const overrideAllowed = readSetupBoolean(
+    generalSetup?.allowChangeSaleRate,
+    false
+  );
   const overrideReason = normalize(req.body.rateOverrideReason || req.body.overrideReason);
 
   for (let index = 0; index < items.length; index += 1) {
@@ -2376,10 +2369,10 @@ const enforceTrustedSalesRates = async ({ req, items, distributorId, firmId, gdC
     const trustedRate = Number(stock?.SRate || product?.Rate_Per_Unit || 0);
     const submittedRate = Number(item.rate ?? item.salesRate ?? item.SRate ?? 0);
     const changed = trustedRate <= 0 || Math.abs(submittedRate - trustedRate) > 0.001;
-    if (changed && (!overrideAllowed || !overrideReason)) {
+    if (changed && !overrideAllowed) {
       const error = new Error(trustedRate > 0
-        ? `Sales rate for product ${code} must be ${trustedRate.toFixed(2)}. A permitted override with a reason is required.`
-        : `A trusted sales rate is unavailable for product ${code}. A permitted override with a reason is required.`);
+        ? `Sales rate for product ${code} must be ${trustedRate.toFixed(2)}. Enable Allow Change Sales Rate in General Setup to override it.`
+        : `A trusted sales rate is unavailable for product ${code}. Enable Allow Change Sales Rate in General Setup to override it.`);
       error.statusCode = 403;
       throw error;
     }
