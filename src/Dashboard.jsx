@@ -2760,89 +2760,20 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     /*
     * STEP 3:
-    * Load complete print details for every invoice.
+    * Load complete print details for every invoice in bill order. Do not
+    * silently skip a failed bill: the print job must contain the full load.
     */
-    const printResults =
-      await Promise.all(
-        filteredBills.map(
-          async (bill) => {
-            const salesId = String(
-              bill.SalesBillId ??
-              bill.salesBillId ??
-              bill.salesId ??
-              bill.SalesId ??
-              bill._id ??
-              bill.id ??
-              ""
-            ).trim();
-
-            if (!salesId) {
-              console.warn(
-                "Sales bill ID missing:",
-                bill
-              );
-
-              return null;
-            }
-
-            const printQuery =
-              new URLSearchParams({
-                distributorId,
-                firmId,
-              });
-
-            const response =
-              await fetch(
-                `${API_URL}/sales/${encodeURIComponent(
-                  salesId
-                )}/print-details?${printQuery.toString()}`
-              );
-
-            const responseType =
-              response.headers.get(
-                "content-type"
-              ) || "";
-
-            const result =
-              responseType.includes(
-                "application/json"
-              )
-                ? await response.json()
-                : {
-                  success: false,
-                  message:
-                    await response.text(),
-                };
-
-            if (
-              !response.ok ||
-              result.success === false
-            ) {
-              console.error(
-                "Invoice print details failed:",
-                {
-                  salesId,
-                  bill,
-                  result,
-                }
-              );
-
-              return null;
-            }
-
-            return result;
-          }
-        )
+    const validPrintResults =
+      await loadBillPrintInvoicePayloads(
+        filteredBills
       );
 
-    const validPrintResults =
-      printResults.filter(Boolean);
-
     if (
-      validPrintResults.length === 0
+      validPrintResults.length !==
+      filteredBills.length
     ) {
       throw new Error(
-        "Bills were found in the load, but their print details could not be loaded."
+        "Unable to load every invoice in the selected load."
       );
     }
 
@@ -3088,6 +3019,120 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         </body>
       </html>
     `;
+  };
+
+  /*
+   * Bill Print uses the same invoice renderer as Sales Invoice printing.
+   * Load each bill in order so a single browser print job contains every
+   * invoice in the load, in its configured Invoice Print Setup format.
+   */
+  const loadBillPrintInvoicePayloads = async (bills = []) => {
+    const distributorId = String(
+      localStorage.getItem("distributorId") || ""
+    ).trim();
+    const firmId = String(
+      localStorage.getItem("firmId") || ""
+    ).trim();
+
+    const isObjectId = (value) =>
+      /^[a-f\d]{24}$/i.test(String(value || "").trim());
+
+    const fetchJson = async (url) => {
+      const response = await fetch(url, { cache: "no-store" });
+      const contentType = response.headers.get("content-type") || "";
+      const result = contentType.includes("application/json")
+        ? await response.json()
+        : { success: false, message: await response.text() };
+
+      if (!response.ok || result?.success === false) {
+        throw new Error(result?.message || "Unable to load invoice print details.");
+      }
+
+      return result;
+    };
+
+    const invoicePayloads = [];
+
+    for (const bill of bills) {
+      const billSeries = String(
+        bill?.BillSeries ?? bill?.billSeries ?? bill?.TrnSeries ?? bill?.trnSeries ?? ""
+      ).trim();
+      const billNo = String(
+        bill?.BillNo ?? bill?.billNo ?? bill?.TrnNo ?? bill?.trnNo ?? ""
+      ).trim();
+      const billLabel = [billSeries, billNo].filter(Boolean).join("-") || "selected bill";
+      let salesId = String(
+        bill?.SalesBillId ?? bill?.salesBillId ?? bill?._id ?? bill?.id ?? ""
+      ).trim();
+
+      /*
+       * Older loads may contain only a bill series/number snapshot. Resolve
+       * that snapshot first, then use the canonical print-details endpoint.
+       */
+      if (!isObjectId(salesId)) {
+        if (!billNo) {
+          throw new Error(`Sales bill ID is missing for ${billLabel}.`);
+        }
+
+        const findQuery = new URLSearchParams({
+          distributorId,
+          firmId,
+          billSeries,
+          billNo,
+        });
+        const found = await fetchJson(
+          `${API_URL}/sales/find-bill?${findQuery.toString()}`
+        );
+        salesId = String(found?.bill?._id || "").trim();
+      }
+
+      if (!isObjectId(salesId)) {
+        throw new Error(`Sales bill ID is invalid for ${billLabel}.`);
+      }
+
+      const printQuery = new URLSearchParams({ distributorId, firmId });
+      const payload = await fetchJson(
+        `${API_URL}/sales/${encodeURIComponent(salesId)}/print-details?${printQuery.toString()}`
+      );
+      invoicePayloads.push(payload);
+    }
+
+    return invoicePayloads;
+  };
+
+  const buildBillPrintInvoiceOptions = (
+    formData,
+    savedPrintDetails = {}
+  ) => {
+    const printConfig = {
+      ...createDefaultSalesPrintOptions(runtimeGeneralSetup),
+      ...(savedPrintDetails?.printContent || {}),
+      ...(savedPrintDetails?.outputSettings || {}),
+    };
+    const reportNumber = String(printConfig.reportNumber || "1");
+    const selectedPaper = SALES_BILL_PAPER_SIZES.find(
+      (paper) => paper.value === String(printConfig.paperSize || "A4")
+    ) || SALES_BILL_PAPER_SIZES[0];
+
+    return {
+      reportNumber,
+      layout: `REPORT_${reportNumber}`,
+      paperSize: selectedPaper.value,
+      orientation: selectedPaper.orientation,
+      fontSizePercent: printConfig.fontSizePercent,
+      includeButtons: false,
+      // Keep the existing Bill Print copies control functional.
+      copies: Math.min(10, Math.max(1, Number(formData.NoOfCopies || 1))),
+      showScheme: printConfig.showScheme,
+      showHsn: normalizeBillPrintYesNo(formData.HSNSummary, "Y") === "Y",
+      showTaxSummary: printConfig.showTaxSummary,
+      showSerialNo: printConfig.showSerialNo,
+      goodsReturn: printConfig.goodsReturn,
+      damageReturn: printConfig.damageReturn,
+      showBankDetails: printConfig.showBankDetails,
+      showDeclaration: printConfig.showDeclaration,
+      printAccountDetails: savedPrintDetails,
+    };
   };
   /* =========================================================
   OPEN SELECTED SALES BILL FORMAT
@@ -15573,13 +15618,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     if (
       !currentData ||
-      !Array.isArray(currentData.bills) ||
-      currentData.bills.length === 0
+      !currentData.invoiceHtml
     ) {
       const loadedResult =
         await loadBillPrintDataByLoad(
-          billPrintFormData,
-          true
+          billPrintFormData
         );
 
       if (!loadedResult) {
@@ -15590,28 +15633,19 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     }
 
     setBillPrintAction("print");
-    setShowBillPrintPreview(true);
+    setBillPrintError("");
 
-    const numberOfCopies = Math.min(
-      10,
-      Math.max(
-        1,
-        Number(
-          billPrintFormData.NoOfCopies || 1
-        )
-      )
-    );
-
-    window.requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        document.body.setAttribute(
-          "data-bill-print-copies",
-          String(numberOfCopies)
-        );
-
-        window.print();
-      }, 150);
-    });
+    try {
+      /*
+       * invoiceHtml contains every invoice as consecutive print pages. The
+       * browser therefore opens one dialog and sends one ordered print job.
+       */
+      const { printSalesInvoiceHtml } = await import("./utils/invoiceOutput");
+      await printSalesInvoiceHtml(currentData.invoiceHtml);
+    } catch (error) {
+      console.error("Bill Print error:", error);
+      setBillPrintError(error.message || "Failed to print the load invoices.");
+    }
   };
   /* =========================================================
     PDF USING ACTUAL DATABASE DATA
@@ -15633,98 +15667,26 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       return;
     }
 
-    /*
-    * PDF does not open the visible preview.
-    * The preview component is temporarily rendered so jsPDF
-    * can capture the same actual-data layout.
-    */
-    const wasPreviewVisible =
-      showBillPrintPreview;
+    try {
+      const { downloadSalesInvoicePdf } = await import("./utils/invoiceOutput");
+      const fileName = [
+        "BillPrint",
+        loadedResult.updatedForm.LoadSeries || "LOAD",
+        loadedResult.updatedForm.loadNo || "",
+      ]
+        .filter(Boolean)
+        .join("_")
+        .replace(/[^a-z0-9_-]/gi, "_");
 
-    setShowBillPrintPreview(true);
-
-    window.setTimeout(async () => {
-      try {
-        const documentElement =
-          billPrintPreviewRef.current?.querySelector(
-            ".bill-print-document"
-          );
-
-        if (!documentElement) {
-          throw new Error(
-            "Bill Print document is not ready."
-          );
-        }
-
-        const isA5 =
-          billPrintFormData.PaperSize === "A5";
-
-        const { default: jsPDF } = await import("jspdf");
-        const pdf = new jsPDF({
-          orientation:
-            isA5 ? "landscape" : "portrait",
-
-          unit: "mm",
-
-          format:
-            isA5 ? "a5" : "a4",
-
-          compress: true,
-        });
-
-        await pdf.html(documentElement, {
-          margin: isA5
-            ? [5, 5, 5, 5]
-            : [7, 7, 7, 7],
-
-          autoPaging: "text",
-
-          html2canvas: {
-            scale: 0.72,
-            useCORS: true,
-            backgroundColor: "#ffffff",
-            windowWidth:
-              documentElement.scrollWidth,
-          },
-
-          callback: (generatedPdf) => {
-            const fileName = [
-              "BillPrint",
-              billPrintFormData.LoadSeries || "LOAD",
-              billPrintFormData.loadNo || "",
-            ]
-              .filter(Boolean)
-              .join("_");
-
-            generatedPdf.save(
-              `${fileName}.pdf`
-            );
-
-            /*
-            * PDF button must not leave preview open unless
-            * it was already open before clicking PDF.
-            */
-            if (!wasPreviewVisible) {
-              setShowBillPrintPreview(false);
-            }
-          },
-        });
-      } catch (error) {
-        console.error(
-          "Bill Print PDF error:",
-          error
-        );
-
-        setBillPrintError(
-          error.message ||
-          "Failed to generate Bill Print PDF."
-        );
-
-        if (!wasPreviewVisible) {
-          setShowBillPrintPreview(false);
-        }
-      }
-    }, 200);
+      await downloadSalesInvoicePdf(
+        loadedResult.result.invoiceHtml,
+        loadedResult.result.invoiceOptions.paperSize,
+        `${fileName}.pdf`
+      );
+    } catch (error) {
+      console.error("Bill Print PDF error:", error);
+      setBillPrintError(error.message || "Failed to generate Bill Print PDF.");
+    }
   };
 
 
@@ -16020,6 +15982,15 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   };
 
   const getBillPrintHTML = () => {
+    /*
+     * Real Bill Print data is now rendered through the production invoice
+     * layouts. The legacy sample-invoice template below is retained only for
+     * its unused sample generator and must never receive a load response.
+     */
+    if (billPrintData?.invoiceHtml) {
+      return billPrintData.invoiceHtml;
+    }
+
     if (!billPrintData) return '';
 
     const data = billPrintData;
@@ -16965,11 +16936,46 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           ),
       };
 
+      /*
+       * The load-details response is a list/header response. Fetch the full
+       * invoice data one bill at a time so the renderer has the same complete
+       * firm, party, bank and item details as normal Sales Invoice printing.
+       */
+      const invoicePayloads =
+        await loadBillPrintInvoicePayloads(bills);
+
+      if (invoicePayloads.length !== bills.length) {
+        throw new Error(
+          "Unable to prepare every invoice in the selected load."
+        );
+      }
+
+      // This is read-only: it applies the saved Invoice Print Setup without
+      // changing the administrator's selected layout or print preferences.
+      const savedPrintDetails = await loadPrintAccountDetails();
+
+      if (!savedPrintDetails) {
+        throw new Error(
+          "Invoice Print Setup could not be loaded."
+        );
+      }
+
+      const invoiceOptions = buildBillPrintInvoiceOptions(
+        updatedForm,
+        savedPrintDetails
+      );
+
       const finalData = {
         ...result,
         header,
         firm: result.firm || {},
         bills,
+        invoicePayloads,
+        invoiceOptions,
+        invoiceHtml: createCombinedSalesInvoiceHTML(
+          invoicePayloads,
+          invoiceOptions
+        ),
       };
 
       setBillPrintFormData(updatedForm);
