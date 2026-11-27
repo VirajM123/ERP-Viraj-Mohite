@@ -1,0 +1,38 @@
+/* From Uiverse.io by yeisonordonez - https://uiverse.io/yeisonordonez/short-owl-85
+   MIT License, Copyright (c) yeisonordonez (Yeison Ordoñez) */
+.create-load-truck-overlay { box-sizing: border-box; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 30000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 35, 67, .45); }
+.create-load-truck-panel { box-sizing: border-box; width: min(340px, 100%); padding: 16px 20px 22px; display: flex; flex-direction: column; align-items: center; gap: 5px; border-radius: 12px; background: #fff; box-shadow: 0 12px 36px rgba(15, 35, 67, .25); color: #102a43; text-align: center; }
+.create-load-truck-panel strong { font-size: 16px; }
+.create-load-truck-panel span { font-size: 12px; color: #526579; }
+.create-load-truck-frame { position: relative; width: 280px; height: 230px; max-width: 100%; overflow: hidden; }
+.create-load-truck-scene { position: absolute; width: 400px; height: 400px; left: 50%; top: 50%; display: flex; justify-content: center; align-items: center; overflow: hidden; isolation: isolate; transform: translate(-50%, -50%) scale(.7); }
+.create-load-truck-scene, .create-load-truck-scene * { box-sizing: content-box; }
+.create-load-truck-body { position: absolute; background-color: rgb(204, 204, 204); width: 200px; height: 120px; left: 50px; border-top: 4px solid rgb(162, 162, 162); top: 135px; animation: create-load-truck-bounce .4s infinite; }
+.create-load-truck-body::before { content: ""; position: absolute; width: 290px; height: 20px; background-color: rgb(46, 46, 81); bottom: -10px; }
+.create-load-truck-body::after { content: ""; position: absolute; background-color: rgb(229, 229, 229); width: 80px; height: 90px; right: -90px; bottom: 10px; clip-path: polygon(0% 0%, 50% 0, 100% 60%, 100% 100%, 0% 100%); }
+.create-load-truck-window { position: absolute; background-color: rgb(126, 191, 226); width: 50px; height: 40px; right: -75px; top: 26px; z-index: 1; clip-path: polygon(0% 0%, 40% 0, 100% 100%, 0% 100%); border: 2px solid rgb(135, 135, 135); }
+.create-load-truck-window::before { content: ""; position: absolute; background-color: rgb(186, 225, 247); width: 5px; height: 40px; left: 5px; transform: skew(-36deg); box-shadow: 9px 0 rgb(186, 225, 247); }
+.create-load-truck-window::after { content: ""; position: absolute; background-color: rgb(108, 107, 107); width: 10px; height: 10px; bottom: 2px; right: 10px; box-shadow: 2px 6px 0 -2px rgb(229, 229, 229), inset 2px 0 rgb(203, 203, 204); }
+.create-load-truck-wheel { position: absolute; width: 45px; height: 45px; border-radius: 50%; background-color: #bcbcbc; border: 10px solid rgb(4, 4, 4); bottom: 108px; left: 90px; box-shadow: 0 0 0 4px; animation: create-load-truck-rotation .3s linear infinite; }
+.create-load-truck-wheel::before { content: ""; position: absolute; width: 5px; height: 5px; background-color: rgb(67, 67, 67); top: 10px; left: 3px; border-radius: 50%; box-shadow: 14.5px 0 rgb(67, 67, 67), 7px -7px rgb(67, 67, 67), 7px 7px rgb(67, 67, 67), 7px 0 0 4px rgb(67, 67, 67); }
+.create-load-truck-wheel--front { left: 270px; }
+.create-load-truck-cargo { position: absolute; width: 185px; height: 20px; background-color: #e9e9e9; left: 8px; top: 5px; box-shadow: 0 23px #e9e9e9, 0 46px #e9e9e9, 0 69px #e9e9e9; }
+.create-load-truck-cargo::before { position: absolute; content: ""; width: 10px; height: 4px; background-color: red; bottom: -72px; box-shadow: 10px 0 white, 20px 0 red, 30px 0 white, 40px 0 red, 50px 0 white, 60px 0 red, 70px 0 white, 80px 0 red, 90px 0 white, 100px 0 red, 110px 0 white, 120px 0 red, 130px 0 white, 140px 0 red, 150px 0 white, 160px 0 red, 170px 0 white, 175px 0 red; }
+.create-load-truck-cargo::after { position: absolute; content: ""; width: 10px; height: 6px; background-color: rgb(135, 135, 135); top: -6px; left: -10px; box-shadow: 195px 0 rgb(135, 135, 135), 0 125px rgb(46, 46, 81); }
+.create-load-truck-door { position: absolute; width: 10px; height: 4px; background-color: black; right: -31px; bottom: 40px; z-index: 2; }
+.create-load-truck-door::before { content: ""; position: absolute; width: 10px; height: 20px; background-color: rgb(85, 84, 85); left: -21px; z-index: -1; bottom: -30px; box-shadow: inset 0 4px rgb(163, 163, 163); }
+.create-load-truck-lights { position: absolute; width: 12px; height: 20px; background-color: rgb(255, 237, 191); right: -90px; bottom: 0; z-index: 1; box-shadow: inset 0 -8px rgba(172, 2, 2, .719); animation: create-load-truck-front-light 1.5s infinite ease-in-out; }
+.create-load-truck-lights::before { content: ""; position: absolute; width: 6px; height: 15px; background-color: rgb(207, 2, 2); left: -280px; bottom: 0; box-shadow: inset 0 7px rgb(207, 2, 2); animation: create-load-truck-rear-light 1.5s infinite ease-in-out; }
+.create-load-truck-lights::after { content: ""; position: absolute; width: 8px; height: 2px; background-color: rgb(81, 81, 81); top: -8px; box-shadow: 0 -6px rgb(81, 81, 81), 0 -12px rgb(81, 81, 81); right: 0; }
+.create-load-truck-street { height: 2px; width: 70px; background-color: black; position: absolute; bottom: 105px; left: 0; box-shadow: 90px 0, 180px 0, 270px 0, 360px 0; animation: create-load-truck-motion 2s linear infinite; }
+.create-load-truck-street::before { content: ""; height: 2px; width: 70px; background-color: black; position: absolute; bottom: 0; left: 450px; box-shadow: 90px 0, 180px 0, 270px 0, 360px 0; }
+.create-load-truck-post { position: absolute; width: 5px; height: 180px; background-color: black; right: -15px; top: 115px; animation: create-load-truck-post-move 2.9s infinite linear; z-index: -2; }
+.create-load-truck-post::before { width: 20px; height: 20px; position: absolute; content: ""; background-color: black; top: -15px; left: -7px; clip-path: polygon(0% 0%, 100% 0%, 80% 100%, 20% 100%); }
+.create-load-truck-post::after { content: ""; position: absolute; width: 0; height: 0; border-bottom: 20px solid transparent; border-left: 20px solid black; transform: rotate(45deg); top: -23px; left: -7px; }
+@keyframes create-load-truck-bounce { 0% { top: 135px; } 50% { top: 132px; } }
+@keyframes create-load-truck-rotation { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes create-load-truck-front-light { 0% { background-color: rgb(255, 237, 191); box-shadow: inset 0 -8px rgba(172, 2, 2, .719); } 50% { box-shadow: inset 0 -8px rgba(217, 83, 1, .719); } }
+@keyframes create-load-truck-rear-light { 0% { box-shadow: inset 0 9px rgb(207, 2, 2); } 50% { box-shadow: inset 0 9px red; } }
+@keyframes create-load-truck-motion { from { left: 0; } to { left: -450px; } }
+@keyframes create-load-truck-post-move { from { transform: translateX(0); } to { transform: translateX(-650px); } }
+@media (prefers-reduced-motion: reduce) { .create-load-truck-scene * { animation: none !important; } }

@@ -2,7 +2,7 @@
 import React, { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react';
 import { isBoxLikeSalesUnit, salesBillingHeaderError } from "../shared/salesBillingRules.js";
 import { salesLoadStatus } from "../shared/salesLoadStatus.js";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import './Dashboard.css';
 import './DashboardMockup.css';
 import './DashboardHorizontalNav.css';
@@ -16,6 +16,7 @@ import SearchablePartySelect from "./components/SearchablePartySelect";
 import UserProfileModal from "./components/UserProfileModal";
 import ScreenLoading from "./components/ScreenLoading";
 import VisualActivity from "./components/VisualActivity";
+import CreateLoadTruckLoader from "./components/CreateLoadTruckLoader";
 import { showSuccessNotice } from "./components/SuccessNotice";
 import { businessDateIST } from "./utils/businessDate";
 import { entryDaysDateRange } from "./utils/entryDaysDateRange";
@@ -8425,6 +8426,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   // Create Load List State
   const [showCreateLoadList, setShowCreateLoadList] = useState(false);
   const [createLoadListData, setCreateLoadListData] = useState([]);
+  const [isSavingCreateLoad, setIsSavingCreateLoad] = useState(false);
+  const createLoadSaveInFlight = useRef(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const [editingPurchaseId, setEditingPurchaseId] = useState(null);
   const [
@@ -40728,6 +40731,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
 
   const saveCreateLoad = async () => {
+    if (createLoadSaveInFlight.current) return;
     try {
       const distributorId =
         localStorage.getItem("distributorId");
@@ -41090,17 +41094,31 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         ? `${API_URL}/create-load/${editingCreateLoadId}`
         : `${API_URL}/create-load`;
 
-      const response = await secureFetch(endpoint, {
-        method: isEditing ? "PUT" : "POST",
+      createLoadSaveInFlight.current = true;
+      flushSync(() => setIsSavingCreateLoad(true));
+      const animationStartedAt = performance.now();
+      let response;
+      let result;
+      try {
+        response = await secureFetch(endpoint, {
+          method: isEditing ? "PUT" : "POST",
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+          headers: {
+            "Content-Type": "application/json",
+          },
 
-        body: JSON.stringify(payload),
-      });
-
-      const result = await response.json();
+          body: JSON.stringify(payload),
+        });
+        result = await response.json();
+        if (response.ok && result.success) {
+          const remainingAnimationTime = 1200 - (performance.now() - animationStartedAt);
+          if (remainingAnimationTime > 0) {
+            await new Promise((resolve) => window.setTimeout(resolve, remainingAnimationTime));
+          }
+        }
+      } finally {
+        flushSync(() => setIsSavingCreateLoad(false));
+      }
 
       if (!response.ok || !result.success) {
         alert(
@@ -41115,7 +41133,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       alert(
         isEditing
           ? "Load updated successfully!"
-          : "Load saved successfully in MongoDB!"
+          : "Load created successfully!"
       );
 
       const refreshPage =
@@ -41160,6 +41178,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       alert(
         "Server not connected. Load not saved."
       );
+    } finally {
+      createLoadSaveInFlight.current = false;
     }
   };
   const loadCreateLoads =
@@ -68076,6 +68096,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {activeSubMenu === "Create Load" &&
               openFormFor === "Create Load" && (
                 <div className="premium-create-load-page">
+                  {isSavingCreateLoad && <CreateLoadTruckLoader editing={Boolean(editingCreateLoadId)} />}
                   <form
                     className="premium-create-load-form"
                     onSubmit={(event) => {
@@ -68132,6 +68153,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <button
                         type="submit"
                         className="premium-load-create-button"
+                        disabled={isSavingCreateLoad}
                       >
                         {editingCreateLoadId ? (
                           <Save size={16} />
