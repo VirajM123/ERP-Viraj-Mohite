@@ -46,6 +46,7 @@ import CatalogReport, { CATALOG_REPORTS } from "./CatalogReport";
 import CommonReportGrid from "./CommonReportGrid";
 import LoadWiseReport, { LOAD_REPORT_NAMES } from "./LoadWiseReport";
 import ReportLoading from "./components/ReportLoading";
+import AccountLedger from "./AccountLedger";
 
 const EXCEL_HEADER_COLOR = "1F4E79";
 const EXCEL_TOTAL_COLOR = "D9EAF7";
@@ -6366,6 +6367,10 @@ const Report = ({
         </div>
       </div>
     );
+  }
+
+  if (selectedReport === "Account Ledger" || selectedReport === "Party Ledger") {
+    return <AccountLedger key={selectedReport} onBack={onBack} />;
   }
 
   if (isP0Report) {

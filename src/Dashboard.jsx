@@ -306,6 +306,7 @@ const allReportItems = [
   { name: "GSTR1 Report", category: "GST", description: "GSTR-1 outward supply data for Excel, JSON and CSV export.", icon: FileText },
   { name: "General Ledger", category: "Financial", description: "Account-wise journal transactions with debit, credit and closing balance.", icon: BookOpen },
   { name: "Party Ledger", category: "Financial", description: "Customer or supplier ledger for the selected period.", icon: Users },
+  { name: "Account Ledger", category: "Financial", description: "Account transactions, receipts and running balance.", icon: BookOpen },
   { name: "Trial Balance", category: "Financial", description: "Account debit, credit and closing trial balance.", icon: Scale },
   { name: "Cash Book", category: "Financial", description: "Cash account transactions from posted journals.", icon: Wallet },
   { name: "Bank Book", category: "Financial", description: "Bank account transactions from posted journals.", icon: Landmark },
@@ -12323,14 +12324,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       totalCancelAmt
     });
   };
-  const loadSettleLoadBySeriesNo = async (series, no) => {
+  const loadSettleLoadBySeriesNo = async (series, no, { resetForm = false } = {}) => {
     try {
       const { distributorId, firmId } = getFirmSession();
 
       const loadSeries = String(series || "").trim();
       const loadNo = String(no || "").trim();
 
-      if (!distributorId || !firmId || !loadNo) return;
+      if (!distributorId || !firmId || !loadNo) return false;
 
       const params = new URLSearchParams({
         distributorId,
@@ -12348,11 +12349,20 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         setOriginalSettleLoadItems([]);
         calculateSettleLoadSummary([]);
         alert(result.message || "Load not found");
-        return;
+        return false;
       }
 
       const load = result.load || {};
       const bills = Array.isArray(load.items) ? load.items : [];
+
+      if (bills.length === 0) {
+        setSettleLoadData(null);
+        setSettleLoadItems([]);
+        setOriginalSettleLoadItems([]);
+        calculateSettleLoadSummary([]);
+        alert("No items found in this load to settle");
+        return false;
+      }
 
       const transformedItems = bills.map((b, index) => ({
         id: b._id || `${load.loadSeries}-${load.loadNo}-${index}`,
@@ -12392,13 +12402,30 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         loadSeries: load.loadSeries || loadSeries,
         loadNo: String(load.loadNo || loadNo),
         loadDate: load.loadDate || new Date().toISOString().split("T")[0],
-        settleLoadDate: prev.settleLoadDate || new Date().toISOString().split("T")[0],
+        settleLoadDate: resetForm ? businessDateIST() : prev.settleLoadDate || businessDateIST(),
         narration: load.narration || "",
       }));
+      return true;
     } catch (error) {
       console.error("Settle load fetch error:", error);
       alert("Server not connected. Failed to load settlement bills.");
+      return false;
     }
+  };
+  const openSettlementFromLoadList = async (load) => {
+    const loaded = await loadSettleLoadBySeriesNo(load.loadSeries, load.loadNo, { resetForm: true });
+    if (!loaded) return;
+
+    setEditingSettleLoadId(null);
+    setSettleLoadSaved(false);
+    setSettleLoadOptions({ loadLock: false, report: false });
+    setActiveMenu("sales");
+    setActiveSubMenu("Settle Load");
+    setOpenFormFor(null);
+    setShowDashboard(false);
+    setShowCreateLoadList(false);
+    setShowSettleLoadList(false);
+    setShowSettleLoad(true);
   };
   const getSettleStatusStyle = (status) => {
     const s = String(status || "").toLowerCase();
@@ -41881,6 +41908,26 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       setOpenFormFor(null);
     }
   };
+  const openPrintLoadFromList = (load) => {
+    setPrintLoadFormData({
+      ...getSavedPrintLoadSettings(),
+      loadSeries: String(load.loadSeries || ""),
+      loadNo: String(load.loadNo ?? ""),
+      loadDate: load.loadDate || businessDateIST(),
+    });
+    setPrintLoadData(null);
+    setPrintLoadItems([]);
+    setPrintLoadError("");
+    setShowPrintPreview(false);
+    setShowPrintLoadColumnModal(false);
+    setPrintLoadDirectPrint(false);
+    setActiveMenu("sales");
+    setActiveSubMenu("Print Load");
+    setOpenFormFor("Print Load");
+    setShowDashboard(false);
+    setShowCreateLoadList(false);
+  };
+
   const loadPrintLoadData = async (
     form = printLoadFormData,
     openPreview = false
@@ -59051,9 +59098,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   type="button"
                                   className="settle"
                                   onClick={() =>
-                                    handleSettleLoad(
-                                      item.originalItem
-                                    )
+                                    openSettlementFromLoadList(item)
                                   }
                                   title="Settle Load"
                                 >
@@ -59064,8 +59109,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <button
                               type="button"
                               className="print"
-                              onClick={() => window.print()}
-                              title="Print Load List"
+                              onClick={() => openPrintLoadFromList(item)}
+                              title="Print Load"
                             >
                               <Printer size={15} />
                             </button>
@@ -66935,6 +66980,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                           BOX
                                         </option>
 
+                                        <option value="BAG">
+                                          BAG
+                                        </option>
+
                                         <option value="INBOX">
                                           INBOX
                                         </option>
@@ -72865,6 +72914,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <select name="basicUnit" value={productForm.basicUnit} onChange={handleProductInput}>
                         <option value="PCS">PCS</option>
                         <option value="BOX">BOX</option>
+                        <option value="BAG">BAG</option>
                         <option value="INBOX">INBOX</option>
                         <option value="KG">KG</option>
                         <option value="LTR">LTR</option>
@@ -79500,6 +79550,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   >
                                     <option value="PCS">PCS</option>
                                     <option value="BOX">BOX</option>
+                                    <option value="BAG">BAG</option>
                                     <option value="INBOX">INBOX</option>
                                     <option value="KG">KG</option>
                                     <option value="LTR">LTR</option>
@@ -80637,6 +80688,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       >
                                         <option value="PCS">PCS</option>
                                         <option value="BOX">BOX</option>
+                                        <option value="BAG">BAG</option>
                                         <option value="INBOX">INBOX</option>
                                         <option value="KG">KG</option>
                                         <option value="LTR">LTR</option>
@@ -82675,6 +82727,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   >
                                     <option value="PCS">PCS</option>
                                     <option value="BOX">BOX</option>
+                                    <option value="BAG">BAG</option>
                                     <option value="INBOX">INBOX</option>
                                     <option value="KG">KG</option>
                                     <option value="LTR">LTR</option>

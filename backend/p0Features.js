@@ -7,6 +7,7 @@ import { nextDocumentNumber } from "./counters.js";
 import { openingOutstanding } from './openingBalances.js';
 import { businessDateIST } from "./businessDate.js";
 import { ChartAccount, listChartAccounts, validateChartAccountMapping } from "./chartOfAccounts.js";
+import { registerAccountLedgerRoutes } from "./accountLedger.js";
 
 const stockMovementSchema = new mongoose.Schema({
   distributorId: { type: String, required: true }, firmId: { type: String, required: true },
@@ -315,6 +316,7 @@ export const summarizeClassifiedRows = (rows, report) => {
 
 export default function createP0FeaturesRouter(securityRouter) {
   const router = express.Router();
+  registerAccountLedgerRoutes(router, securityRouter, reportDateRangeError);
 
   // Billing customer details are scoped to the authenticated firm, and use
   // the same open-sales and opening-balance basis as customer credit checks.
