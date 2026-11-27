@@ -52098,18 +52098,20 @@ td {
 
 /* Load-status controls apply only to the Sales Invoice list. */
 .sales-load-status-list .ts-sales-page-header { flex-wrap: wrap; }
-.sales-load-status-list .sales-load-counts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-right: auto; }
-.sales-load-status-list .sales-load-count { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border: 1px solid; border-radius: 9px; font-size: 12px; white-space: nowrap; }
+.sales-load-status-list .sales-load-counts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-right: auto; }
+.sales-load-status-list .sales-load-count { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 8px; border: 1px solid; border-radius: 5px; font-size: 10px; white-space: nowrap; }
 .sales-load-status-list .sales-load-count.pending { color: #9a4300; background: #fff7e7; border-color: #ffdfa3; }
 .sales-load-status-list .sales-load-count.loaded { color: #174eb6; background: #f0f6ff; border-color: #c7dafe; }
-.sales-load-status-list .sales-load-count strong { font-size: 14px; }
-.sales-load-status-list .sales-load-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 0; margin-bottom: 8px; border-top: 1px solid #dce6f4; }
-.sales-load-status-list .sales-load-tab { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 12px; color: #344767; background: #fff; border: 1px solid #cedaea; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.sales-load-status-list .sales-load-count strong { font-size: 11px; }
+.sales-load-status-list .sales-load-count svg, .sales-load-status-list .sales-load-tab svg { width: 14px; height: 14px; }
+.sales-load-status-list .sales-load-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; padding: 5px 0; margin-bottom: 4px; border-top: 1px solid #dce6f4; }
+.sales-load-status-list .sales-load-tab { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; padding: 0 8px; color: #344767; background: #fff; border: 1px solid #cedaea; border-radius: 5px; font-size: 10px; font-weight: 600; cursor: pointer; }
 .sales-load-status-list .sales-load-tab:hover, .sales-load-status-list .sales-load-tab.active { border-color: #7ca5fa; background: #eff5ff; color: #124dbb; }
 .sales-load-status-list .sales-load-tab.not_loaded.active { color: #963c00; border-color: #f4a423; background: #fff1ce; }
 .sales-load-status-list .sales-load-tab.cancelled.active { color: #a62a32; border-color: #edaeb0; background: #fff0f0; }
-.sales-load-status-list .ts-required-sales-columns .sales-load-status-column { min-width: 128px !important; width: 128px !important; max-width: none !important; }
-.sales-load-status-list .sales-load-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 7px; white-space: nowrap; font-size: 11px; font-weight: 700; }
+.sales-load-status-list .ts-required-sales-columns .sales-load-status-column { min-width: 112px !important; width: 112px !important; max-width: none !important; border-radius: 0 !important; }
+.sales-load-status-list .sales-load-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; border-radius: 4px; white-space: nowrap; font-size: 10px; font-weight: 700; }
+.sales-load-status-list .sales-load-badge svg { width: 13px; height: 13px; }
 .sales-load-status-list .sales-load-badge.not_loaded { color: #994000; background: #fff0cb; }
 .sales-load-status-list .sales-load-badge.loaded { color: #1457bf; background: #eaf2ff; }
 .sales-load-status-list .sales-load-badge.cancelled { color: #a32833; background: #ffeded; }
