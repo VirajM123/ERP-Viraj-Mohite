@@ -1,3 +1,5 @@
+import { isBoxLikeSalesUnit } from "../shared/salesBillingRules.js";
+
 const pick = (obj, keys, fallback = "") => {
   for (const key of keys) if (obj?.[key] !== undefined && obj[key] !== null && obj[key] !== "") return obj[key];
   return fallback;
@@ -26,7 +28,7 @@ export function buildPrintLoadProductRows(bills, products = [], includeFree = tr
     const billed = number(pick(item, ["qty", "Qty", "quantity"], 0));
     const free = number(pick(item, ["free", "Free", "freeQty", "FreeQty"], 0));
     const unit = String(pick(item, ["units", "unit", "Unit"], "")).trim().toUpperCase();
-    const pieces = unit === "BOX" ? (pack > 0 ? billed * pack : null) : billed;
+    const pieces = isBoxLikeSalesUnit(unit) ? (pack > 0 ? billed * pack : null) : billed;
     if (pieces === null) row.unknownQty = true;
     row.qty += pieces ?? 0;
     row.freeQty += free;

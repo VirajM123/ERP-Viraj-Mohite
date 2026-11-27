@@ -87,6 +87,9 @@ const receiptSchema = new mongoose.Schema(
         bankCashName: String,
         bankCashGroup: String,
         receiptAmount: Number,
+        receiptSource: { type: String, default: "DIRECT" },
+        receiptSeries: String,
+        loadSeries: String,
         unadjustedAmount: { type: Number, default: 0 },
 
         chequeNo: String,
@@ -2041,6 +2044,9 @@ router.put(
       if (existingReceipt.status === "REVERSED") {
         return res.status(409).json({ success: false, message: "A reversed receipt cannot be edited." });
       }
+      if (existingReceipt.receiptSource === "SETTLE_LOAD") {
+        return res.status(409).json({ success: false, message: "This receipt belongs to a load settlement and cannot be edited separately." });
+      }
 
       const body =
         req.body || {};
@@ -2615,6 +2621,7 @@ router.delete(
         await session.withTransaction(async () => {
           const receipt = await Receipt.findOne(tenantFilter(req, { _id: req.params.id, status: { $ne: "REVERSED" } })).session(session);
           if (!receipt) throw Object.assign(new Error("Receipt not found or already reversed."), { statusCode: 404 });
+          if (receipt.receiptSource === "SETTLE_LOAD") throw Object.assign(new Error("This receipt belongs to a load settlement and cannot be reversed separately."), { statusCode: 409 });
           const sales = mongoose.connection.collection("T_Sal_Header");
           for (const bill of receipt.receiptBills || []) {
             const allocation = Number(bill.nowAdjust || 0) + Number(bill.discAmt || 0);

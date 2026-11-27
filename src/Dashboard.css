@@ -20953,7 +20953,7 @@ body
 @media print {
   @page print-load {
     size: A4 portrait;
-    margin: 8mm;
+    margin: 5mm;
   }
 
   body:has(#print-load-content) * {
@@ -21000,8 +21000,8 @@ body
 
   .print-load-document-page {
     page: print-load;
-    width: 194mm !important;
-    min-height: 281mm !important;
+    width: 200mm !important;
+    min-height: 287mm !important;
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;

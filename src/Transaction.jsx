@@ -9977,12 +9977,9 @@ setTransactionFormMode((prev) => ({
   const getCustomerBankParty = (bank) =>
     bank.partyName || bank.customerName || bank.accountName || bank.party || "";
 
-  const filteredCustomerBanks = customerBanks.filter((bank) => {
-    const bankParty = String(getCustomerBankParty(bank)).trim().toLowerCase();
-    const selectedParty = String(receiptFormData.partyName).trim().toLowerCase();
-
-    return !selectedParty || !bankParty || bankParty === selectedParty;
-  });
+  // Drawee banks are selectable for any customer; a bank master may have
+  // been created with a different customer name or an older spelling.
+  const filteredCustomerBanks = customerBanks;
 
   const selectedPartyName = clean(receiptFormData.partyName);
 

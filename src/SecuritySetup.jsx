@@ -2652,7 +2652,10 @@ export const secureFetch = async (
   options = {}
 ) => {
   if (!isTrustedApiDestination(url)) throw new Error("Authenticated requests are restricted to the configured API origin.");
-  const response = await authenticatedFetch(url, options);
+  const isReportRequest = /\/api\/(?:p0\/)?reports\//.test(String(url));
+  const response = await authenticatedFetch(url, isReportRequest && !options.cache
+    ? { ...options, cache: "no-store" }
+    : options);
 
   // Authentication expired
   if (response.status === 401) {

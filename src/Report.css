@@ -10007,6 +10007,12 @@ input[placeholder="Search reports..."]::placeholder {
 }
 
 /* Grid controls beside the party report criteria toggle. */
+.load-wise-report-page .load-report-note {
+  padding: 2px 8px;
+  color: #506989;
+  font-size: 11px;
+}
+
 @media screen {
   .party-classic-report-page.party-wise-sales-report-page .party-criteria-heading-actions,
   .party-classic-report-page.party-wise-sales-report-page .party-grid-controls-target {

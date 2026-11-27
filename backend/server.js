@@ -1,6 +1,7 @@
 import express from "express";
 import crypto from "node:crypto";
 import { validateOpeningTransactions } from "../shared/openingTransactions.js";
+import { salesBillingHeaderError } from "../shared/salesBillingRules.js";
 import createOpeningBalancesRouter, { saveAccountWithOpenings } from "./openingBalances.js";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -11,6 +12,7 @@ import companyWiseSeriesRoutes from "./companyWiseSeries.js";
 import createBatchLockRouter from "./batchLock.js";
 import printAccountDetailsRoutes from "./printAccountDetails.js";
 import { buildPrintLoadProductRows, buildPrintLoadPartyRows } from "./printLoadData.js";
+import { buildLoadReports } from "./loadReports.js";
 import createSecuritySetupRouter from "./securitySetup.js";
 import { authorizeAny } from "./authorizeAny.js";
 import { allowedBrowserOrigin, browserLoginRequested, createBrowserSession, revokeBrowserSession } from "./browserSessions.js";
@@ -32,6 +34,7 @@ import {
 } from "./auth.js";
 import { writeAuditEvent } from "./audit.js";
 import { postBalancedJournal, reverseSourceJournal } from "./accounting.js";
+import { reserveSettlementAllocation } from "./settlementAllocation.js";
 import { nextDocumentNumber } from "./counters.js";
 import { businessDateIST } from "./businessDate.js";
 import { assertSalesDateAllowed } from "./generalSetupDatePolicy.js";
@@ -3352,9 +3355,9 @@ app.get(
               );
 
             const productName =
-              savedProductName ||
               productMaster
                 ?.productName ||
+              savedProductName ||
               "";
 
             const stockRow =
@@ -8604,6 +8607,11 @@ app.put(
     }).session(session);
 
     if (!oldBill) throw new Error("Original sales bill not found");
+    const billingHeaderError = salesBillingHeaderError({
+      areaCode: AreaCode, salesmanCode: SalesmanCode,
+      entryType: SalesEntryType || oldBill.SalesEntryType,
+    });
+    if (billingHeaderError) throw Object.assign(new Error(billingHeaderError), { statusCode: 400 });
     /*
 * Read General Setup for this firm.
 */
@@ -12821,6 +12829,11 @@ app.post(
           "At least one product is required"
         );
       }
+      const billingHeaderError = salesBillingHeaderError({
+        areaCode: AreaCode, salesmanCode: SalesmanCode, entryType: SalesEntryType,
+        desktopImport: req.body._desktopImport === true,
+      });
+      if (billingHeaderError) throw Object.assign(new Error(billingHeaderError), { statusCode: 400 });
       if (req.auth.role === "SALESMAN") {
         if (!req.auth.salesmanCode) throw Object.assign(new Error("This user is not assigned to a salesman master."), { statusCode: 403 });
         if (String(SalesmanCode || "").trim() !== req.auth.salesmanCode) throw Object.assign(new Error("Salesmen may only post bills assigned to themselves."), { statusCode: 403 });
@@ -17476,6 +17489,7 @@ app.put(
           "Selected bills do not contain a valid Bill No or Sales Bill ID"
         );
       }
+      await attachLoadBillItemSnapshots(cleanBills, billConditions, DistributorId, FirmId, session, existingLoad.Bills);
       /*
       * Ensure another active load has not taken
       * one of these bills.
@@ -18701,6 +18715,20 @@ const buildCreateLoadBillCondition = (bill) => {
   };
 };
 
+const attachLoadBillItemSnapshots = async (bills, conditions, distributorId, firmId, session, previousBills = []) => {
+  const sales = await SalesHeader.find({ distributorId, firmId, $or: conditions }).select("BillSeries BillNo items").session(session).lean();
+  const billKey = (bill) => `${String(bill.BillSeries ?? bill.Series ?? bill.billSeries ?? "").trim()}|${String(bill.BillNo ?? bill.billNo ?? "").trim()}`;
+  const previous = new Map((previousBills || []).map((bill) => [billKey(bill), bill]));
+  const byKey = new Map(sales.map((bill) => [billKey(bill), bill]));
+  const byId = new Map(sales.map((bill) => [String(bill._id), bill]));
+  for (const bill of bills) {
+    const saved = previous.get(billKey(bill));
+    const sale = byId.get(String(bill.SalesBillId || "")) || byKey.get(billKey(bill));
+    const source = Array.isArray(saved?.items) ? saved.items : sale?.items;
+    if (Array.isArray(source)) bill.items = source;
+  }
+};
+
 
 app.post(
   "/api/create-load",
@@ -18932,6 +18960,8 @@ app.post(
           "Selected bills do not contain a valid Bill No or Sales Bill ID"
         );
       }
+
+      await attachLoadBillItemSnapshots(cleanBills, billConditions, DistributorId, FirmId, session);
 
       const alreadyLoaded =
         await SalesHeader.findOne({
@@ -19233,6 +19263,33 @@ app.get(
       });
     }
 
+    const existingSettlement = await SettleLoad.findOne({
+      distributorId,
+      firmId,
+      loadSeries: String(load.LoadSeries || loadSeries || "").trim(),
+      loadNo: String(load.LoadNo || loadNo).trim(),
+      isActive: true,
+    }).lean();
+
+    if (existingSettlement) {
+      return res.status(409).json({
+        success: false,
+        message: "This load is already settled. Open the saved settlement from the Settle Load list to view it.",
+      });
+    }
+
+    const billConditions = (load.Bills || []).map((bill) => buildCreateLoadBillCondition({
+      SalesBillId: bill.SalesBillId || bill.salesBillId,
+      BillSeries: bill.BillSeries ?? bill.Series ?? bill.billSeries,
+      BillNo: bill.BillNo ?? bill.billNo,
+    })).filter(Boolean);
+    const salesBills = billConditions.length
+      ? await SalesHeader.find({ distributorId, firmId, $or: billConditions })
+        .select("BillSeries BillNo SalesmanCode SalesmanName").lean()
+      : [];
+    const salesById = new Map(salesBills.map((bill) => [String(bill._id), bill]));
+    const salesByNumber = new Map(salesBills.map((bill) => [`${String(bill.BillSeries || "").trim()}|${String(bill.BillNo || "").trim()}`, bill]));
+
     res.json({
       success: true,
       load: {
@@ -19241,7 +19298,10 @@ app.get(
         loadNo: load.LoadNo || "",
         loadDate: load.LoadDate || "",
         narration: load.Narration || "",
-        items: (load.Bills || []).map((b) => ({
+        items: (load.Bills || []).map((b) => {
+          const sale = salesById.get(String(b.SalesBillId || b.salesBillId || "")) ||
+            salesByNumber.get(`${String(b.BillSeries || b.Series || b.billSeries || "").trim()}|${String(b.BillNo || b.billNo || "").trim()}`) || {};
+          return {
           _id: b._id,
           BillType: b.BillType || b.billType,
           BillDate: b.BillDate || b.billDate,
@@ -19249,10 +19309,12 @@ app.get(
           BillNo: b.BillNo || b.billNo,
           PartyCode: b.PartyCode || b.partyCode,
           PartyName: b.PartyName || b.partyName,
-          SalesmanName: b.SalesmanName || b.SalesmanCode || b.salesman,
+          SalesmanName: sale.SalesmanName || b.SalesmanName || b.salesman || sale.SalesmanCode || b.SalesmanCode,
+          SalesmanCode: sale.SalesmanCode || b.SalesmanCode || "",
           AreaName: b.AreaName || b.area,
           Amount: b.Amount || b.billAmount || b.NetAmount || b.netAmount || 0,
-        })),
+          };
+        }),
       },
     });
   } catch (error) {
@@ -20725,6 +20787,7 @@ const settleLoadBillSchema = new mongoose.Schema(
     salesman: String,
 
     billType: String,
+    loadedItems: { type: Array, default: undefined },
     billAmount: Number,
     receiptAmount: Number,
     pendingAmount: Number,
@@ -20890,6 +20953,82 @@ receiptSchema.index(
 const Receipt =
   mongoose.models.T_Receipt || mongoose.model("T_Receipt", receiptSchema);
 
+app.get("/api/receipt/lookups", ensureConnection, authorizeReadFor(
+  ["TRANSACTIONS", "RECEIPT", "view"], ["TRANSACTIONS", "RECEIPT", "add"],
+  ["TRANSACTIONS", "RECEIPT", "edit"], ["SALES", "SETTLE_LOAD", "view"],
+  ["SALES", "SETTLE_LOAD", "add"], ["SALES", "SETTLE_LOAD", "edit"]
+), async (req, res) => {
+  try {
+    const scope = { distributorId: req.auth.distributorId, firmId: req.auth.firmId, isActive: { $ne: false } };
+    const [banks, otherAccounts, salesmen] = await Promise.all([
+      CustomerBank.find(scope).select("bankCode bankName micrCode clearingType customerCode customerName").lean(),
+      OtherAccount.find({ ...scope, accountGroup: /^bank accounts?$/i }).select("accountCode accountName accountGroup").lean(),
+      Salesman.find(scope).select("salesmanCode salesmanName").lean(),
+    ]);
+    res.set("Cache-Control", "no-store");
+    return res.json({ success: true, customerBanks: banks, otherAccounts, salesmen });
+  } catch (error) {
+    console.error("Receipt lookups error:", error);
+    return res.status(500).json({ success: false, message: "Unable to load receipt banks and salesmen." });
+  }
+});
+
+app.get("/api/reports/load-wise/:type", ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PARTY_WISE_SALES", "view"), async (req, res) => {
+    try {
+      const { type } = req.params;
+      if (!["summary", "collection", "cancel"].includes(type)) return res.status(404).json({ success: false, message: "Unknown report." });
+      const { distributorId, firmId } = req.auth;
+      const fromDate = String(req.query.fromDate || "").trim();
+      const toDate = String(req.query.toDate || "").trim();
+      const loadSeries = String(req.query.loadSeries || "").trim();
+      const loadNoText = String(req.query.loadNo || "").trim();
+      if ((fromDate && !/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) || (toDate && !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) || (fromDate && toDate && fromDate > toDate) || (loadNoText && !/^\d+$/.test(loadNoText))) return res.status(400).json({ success: false, message: "Invalid date range or load number." });
+      const loadFilter = { DistributorId: distributorId, FirmId: firmId, IsCancelled: { $ne: true } };
+      if (fromDate || toDate) loadFilter.LoadDate = { ...(fromDate ? { $gte: fromDate } : {}), ...(toDate ? { $lte: toDate } : {}) };
+      if (loadSeries) loadFilter.LoadSeries = loadSeries;
+      if (loadNoText) loadFilter.LoadNo = Number(loadNoText);
+      let loads = await LoadHeader.find(loadFilter).sort({ LoadDate: 1, LoadNo: 1 }).lean();
+      const scope = { distributorId, firmId };
+      const settlements = await SettleLoad.find({ ...scope, isActive: true, $or: loads.length ? loads.map((l) => ({ loadSeries: l.LoadSeries || "", loadNo: String(l.LoadNo) })) : [{ _id: null }] }).lean();
+      const bills = loads.flatMap((load) => {
+        const settlement = settlements.find((s) => String(s.loadSeries || "") === String(load.LoadSeries || "") && String(s.loadNo) === String(load.LoadNo));
+        return settlement?.bills?.length ? settlement.bills : (load.Bills || []);
+      });
+      const conditions = bills.map((b) => {
+        const id = String(b.SalesBillId || "").trim();
+        if (mongoose.isValidObjectId(id)) return { _id: new mongoose.Types.ObjectId(id) };
+        const billNo = Number(b.billNo ?? b.BillNo ?? 0);
+        const series = String(b.billSeries ?? b.BillSeries ?? b.Series ?? "").trim();
+        if (!billNo) return null;
+        return series ? { BillSeries: series, BillNo: billNo } : { BillNo: billNo, $or: [{ BillSeries: "" }, { BillSeries: null }, { BillSeries: { $exists: false } }] };
+      }).filter(Boolean);
+      const sales = conditions.length ? await SalesHeader.find({ ...scope, $or: conditions, ...(req.auth.role === "SALESMAN" ? { SalesmanCode: req.auth.salesmanCode || "__UNASSIGNED__" } : {}) }).lean() : [];
+      if (req.auth.role === "SALESMAN") {
+        const allowed = new Set(sales.map((b) => `${String(b.BillSeries || "").trim()}|${String(b.BillNo || "").trim()}`));
+        const belongs = (b) => allowed.has(`${String(b.billSeries ?? b.BillSeries ?? b.Series ?? "").trim()}|${String(b.billNo ?? b.BillNo ?? "").trim()}`);
+        loads = loads.map((l) => ({ ...l, Bills: (l.Bills || []).filter(belongs) }));
+        settlements.forEach((s) => { s.bills = (s.bills || []).filter(belongs); });
+        loads = loads.filter((l) => l.Bills.length || settlements.some((s) => s.loadSeries === l.LoadSeries && String(s.loadNo) === String(l.LoadNo) && s.bills.length));
+      }
+      const productCodes = [...new Set([
+        ...sales.flatMap((b) => b.items || []),
+        ...bills.flatMap((b) => b.loadedItems || b.items || []),
+      ].map((i) => String(i.productCode || i.ProductCode || i.productId || "").trim()).filter(Boolean))];
+      const [products, accounts, receipts] = await Promise.all([
+        productCodes.length ? Product.find({ ...scope, productCode: { $in: productCodes } }).lean() : [],
+        Account.find(scope).select("accountCode accountName").lean(),
+        type === "collection" ? Receipt.find({ ...scope, status: { $ne: "REVERSED" } }).lean() : [],
+      ]);
+      const rows = buildLoadReports({ type, loads, settlements, sales, receipts, products, accounts });
+      res.set("Cache-Control", "no-store");
+      return res.json({ success: true, rows });
+    } catch (error) {
+      console.error("Load report error:", error);
+      return res.status(500).json({ success: false, message: "Could not generate the load report." });
+    }
+  });
+
 app.post(
   "/api/settle-load/save",
   ensureConnection,
@@ -20902,8 +21041,6 @@ app.post(
       session.startTransaction();
 
       const {
-        distributorId,
-        firmId,
         firmName = "",
         loadSeries = "",
         loadNo,
@@ -20913,6 +21050,7 @@ app.post(
         items = [],
         summary = {},
       } = req.body;
+      const { distributorId, firmId } = req.auth;
 
       const cleanLoadSeries = String(
         loadSeries || ""
@@ -20959,6 +21097,69 @@ app.post(
         );
       }
 
+      const existingSettlement = await SettleLoad.findOne({
+        distributorId,
+        firmId,
+        loadSeries: cleanLoadSeries,
+        loadNo: cleanLoadNo,
+        isActive: true,
+      }).session(session).lean();
+
+      if (existingSettlement) {
+        const getSettlementBillKey = (item = {}) =>
+          `${String(item.billSeries || "").trim()}|${String(item.billNo || "").trim()}`;
+
+        const submittedBills = new Map(
+          items.map((item) => [getSettlementBillKey(item), item])
+        );
+
+        const finalizedBillChanged = (existingSettlement.bills || []).some((savedItem) => {
+          const savedStatus = String(savedItem.status || "").trim().toLowerCase();
+          const savedActionIsFinal =
+            savedItem.cancel === "Y" ||
+            savedItem.pending === "Y" ||
+            savedItem.adjust === "Y" ||
+            Number(savedItem.receiptAmount || 0) > 0 ||
+            ["cancelled", "received", "partial", "adjusted", "receipt"].includes(savedStatus);
+
+          if (!savedActionIsFinal) return false;
+
+          const submittedItem = submittedBills.get(getSettlementBillKey(savedItem));
+
+          return (
+            !submittedItem ||
+            String(submittedItem.cancel || "N") !== String(savedItem.cancel || "N") ||
+            String(submittedItem.pending || "N") !== String(savedItem.pending || "N") ||
+            String(submittedItem.adjust || "N") !== String(savedItem.adjust || "N") ||
+            Math.abs(
+              Number(submittedItem.receiptAmount || 0) -
+              Number(savedItem.receiptAmount || 0)
+            ) > 0.01
+          );
+        });
+
+        if (finalizedBillChanged) {
+          const error = new Error(
+            "A bill with a saved settlement action cannot be changed or collected again. Reverse the settlement through the approved reversal workflow first."
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
+      const loadSnapshotByBill = new Map((load.Bills || []).map((bill) => [`${String(bill.BillSeries ?? bill.Series ?? "").trim()}|${String(bill.BillNo ?? "").trim()}`, bill]));
+      const previousSnapshotByBill = new Map((existingSettlement?.bills || []).map((bill) => [`${String(bill.billSeries || "").trim()}|${String(bill.billNo || "").trim()}`, bill]));
+      const submittedKeys = new Set();
+      for (const item of items) {
+        const key = `${String(item.billSeries || "").trim()}|${String(item.billNo || "").trim()}`;
+        if (submittedKeys.has(key) || (!loadSnapshotByBill.has(key) && !previousSnapshotByBill.has(key))) {
+          throw Object.assign(new Error("Duplicate or unknown bill in settlement."), { statusCode: 400 });
+        }
+        submittedKeys.add(key);
+        if (!Number.isFinite(Number(item.receiptAmount || 0)) || Number(item.receiptAmount || 0) < 0) {
+          throw Object.assign(new Error("Invalid receipt amount."), { statusCode: 400 });
+        }
+      }
       const normalizedItems = items.map(
         (item, index) => {
           const isCancelled =
@@ -21020,6 +21221,10 @@ app.post(
 
             billType:
               item.billType || "Credit",
+
+            loadedItems:
+              previousSnapshotByBill.get(`${String(item.billSeries || "").trim()}|${String(item.billNo || "").trim()}`)?.loadedItems ||
+              loadSnapshotByBill.get(`${String(item.billSeries || "").trim()}|${String(item.billNo || "").trim()}`)?.items,
 
             originalBillAmount,
             billAmount,
@@ -21210,11 +21415,24 @@ app.post(
         );
 
       for (const item of receiptItems) {
-        let receiptNumber = Number(
-          item.receiptNo || 0
-        );
-
-        if (!receiptNumber) {
+        const previous = previousSnapshotByBill.get(`${item.billSeries}|${item.billNo}`);
+        if (previous && Number(previous.receiptAmount || 0) > 0) {
+          item.pendingAmount = previous.pendingAmount;
+          item.status = previous.status;
+          continue;
+        }
+        if (!item.bankCash || (!/^cash$/i.test(item.bankCash) && !String(item.chequeNo || "").trim())) {
+          throw Object.assign(new Error("Select cash or a bank account and enter a cheque number for bank receipts."), { statusCode: 400 });
+        }
+        const { invoice, pending } = await reserveSettlementAllocation({
+          sales: mongoose.connection.collection("T_Sal_Header"), Receipt,
+          scope: { distributorId, firmId }, item, session,
+        });
+        item.pendingAmount = pending;
+        item.status = pending > 0 ? "Partial" : "Received";
+        item.adjust = pending > 0 ? "N" : "Y";
+        let receiptNumber;
+        {
           const lastReceipt =
             await Receipt.findOne({
               distributorId,
@@ -21226,22 +21444,18 @@ app.post(
               .session(session)
               .lean();
 
-          receiptNumber =
-            Number(lastReceipt?.rno || 0) +
-            1;
+          receiptNumber = await nextDocumentNumber({ distributorId, firmId, documentType: "RECEIPT", series: item.billSeries, documentDate: item.receiptDate || settlementDate, session, minimumValue: Number(lastReceipt?.rno || 0) });
         }
+        item.receiptNo = String(receiptNumber);
 
-        await Receipt.findOneAndUpdate(
+        const savedReceipt = await Receipt.findOneAndUpdate(
           {
-            distributorId,
-            firmId,
-            billSeries:
-              item.billSeries,
-            billNo:
-              item.billNo,
+            _id: new mongoose.Types.ObjectId(),
           },
           {
             $set: {
+              distributorId, firmId, status: "POSTED",
+              partyId: invoice.PartyCode || item.partyCode || "",
               firmName,
 
               receiptDate:
@@ -21280,7 +21494,7 @@ app.post(
                 item.bankCash ||
                 item.bankName ||
                 "",
-              drawerBank:
+              drawerBankName:
                 item.drawerBank || "",
               loadSeries:
                 cleanLoadSeries,
@@ -21354,37 +21568,22 @@ app.post(
             session,
           }
         );
+        await postBalancedJournal({
+          distributorId, firmId, sourceType: "RECEIPT", sourceId: String(savedReceipt._id),
+          documentNo: String(receiptNumber), documentDate: item.receiptDate || settlementDate,
+          createdBy: req.auth.userId,
+          lines: [
+            { accountCode: item.bankCash, debit: item.receiptAmount, credit: 0, narration: item.receiptNarration || "Receipt" },
+            { accountCode: invoice.PartyCode || item.partyCode || item.partyName, debit: 0, credit: item.receiptAmount, narration: item.receiptNarration || "Receipt" },
+          ],
+        }, session);
+        await writeAuditEvent(req, { entityType: "RECEIPT", entityId: String(savedReceipt._id), action: "CREATE", after: savedReceipt.toObject() }, session);
       }
 
-      /*
-      * Remove receipts when user changed a bill to
-      * Pending or Cancel before saving.
-      */
-      const noReceiptItems =
-        normalizedItems.filter(
-          (item) =>
-            item.cancel === "Y" ||
-            item.pending === "Y" ||
-            Number(item.receiptAmount || 0) <=
-            0
-        );
-
-      for (const item of noReceiptItems) {
-        await Receipt.updateMany(
-          {
-            distributorId,
-            firmId,
-            billSeries:
-              item.billSeries,
-            billNo:
-              item.billNo,
-            receiptSource:
-              "SETTLE_LOAD",
-          },
-          { $set: { status: "REVERSED", reversedAt: new Date(), reversedBy: req.auth.userId, reversalReason: "Settlement allocation removed" } },
-          { session }
-        );
-      }
+      await SettleLoad.updateOne({ _id: settleLoad._id }, { $set: {
+        bills: normalizedItems,
+        totalPendingAmount: normalizedItems.reduce((sum, item) => sum + Number(item.pendingAmount || 0), 0),
+      } }, { session });
 
       /*
       * Pending bills become available in Create Load.
@@ -21533,6 +21732,8 @@ app.post(
           BillNo:
             Number(item.billNo || 0),
 
+          items: item.loadedItems,
+
           BillType:
             item.billType,
 
@@ -21638,7 +21839,7 @@ app.post(
         error
       );
 
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         success: false,
         message:
           error.message ||
@@ -22703,6 +22904,21 @@ app.put(
       });
     }
 
+    const existing = await SettleLoad.findOne({
+      _id: req.params.id,
+      distributorId: req.auth.distributorId,
+      firmId: req.auth.firmId,
+      isActive: true,
+    }).lean();
+    if (!existing) return res.status(404).json({ success: false, message: "Settle Load record not found" });
+    if ((existing.bills || []).some((bill) =>
+      bill.cancel === "Y" || bill.pending === "Y" || bill.adjust === "Y" ||
+      Number(bill.receiptAmount || 0) > 0 ||
+      ["cancelled", "received", "partial", "adjusted", "receipt"].includes(String(bill.status || "").trim().toLowerCase())
+    )) {
+      return res.status(409).json({ success: false, message: "This settlement contains completed bill actions and cannot be changed through this endpoint." });
+    }
+
     const bills = items.map((item, index) => {
       const billAmount = Number(item.billAmount || 0);
       const receiptAmount = Number(item.receiptAmount || 0);
@@ -22891,11 +23107,15 @@ app.get("/api/receipt/bill-balance", ensureConnection, authorizeReadFor(
     const { distributorId, firmId } = req.auth;
     const billSeries = String(req.query.billSeries || "").trim();
     const billNo = String(req.query.billNo || "").trim();
-    const billAmount = Number(req.query.billAmount || 0);
-
-    const receipts = await Receipt.find({ distributorId, firmId, billSeries, billNo }).lean();
-    const paidAmount = receipts.reduce((sum, r) => sum + Number(r.receiptAmount || 0), 0);
-    const pendingAmount = Math.max(billAmount - paidAmount, 0);
+    const sale = await SalesHeader.findOne({ distributorId, firmId, BillSeries: billSeries, BillNo: Number(billNo), isActive: { $ne: false }, IsBillCancelled: { $ne: true } }).lean();
+    if (!sale) return res.status(404).json({ success: false, message: "Sales bill not found." });
+    const receipts = await Receipt.find({ distributorId, firmId, status: { $ne: "REVERSED" }, receiptBills: { $elemMatch: { trnSeries: billSeries, trnNo: billNo } } }).lean();
+    const fromReceipts = receipts.reduce((sum, receipt) => sum + (receipt.receiptBills || []).reduce((total, bill) => {
+      if (bill.openingTransactionId || bill.trnSeries !== billSeries || String(bill.trnNo) !== billNo) return total;
+      return total + (bill.legacyOverAllocation ? Number(bill.appliedAmount || 0) : Number(bill.nowAdjust || 0) + Number(bill.discAmt || 0));
+    }, 0), 0);
+    const paidAmount = Math.max(Number(sale.receiptAllocated || 0), fromReceipts);
+    const pendingAmount = Math.max(Number(sale.NetAmount ?? sale.BillAmount ?? 0) - paidAmount, 0);
 
     res.json({ success: true, paidAmount, pendingAmount });
   } catch (error) {
@@ -30472,6 +30692,10 @@ app.delete(
       });
     }
 
+    if ((settleLoad.bills || []).some((bill) => Number(bill.receiptAmount || 0) > 0)) {
+      return res.status(409).json({ success: false, message: "This settlement contains receipts and cannot be cancelled without reversing its financial entries." });
+    }
+
     // Get all bills from this settle load
     const billConditions = (settleLoad.bills || [])
       .map(b => ({
@@ -32918,6 +33142,16 @@ app.get(
         }
       }
 
+      // Use the current master name when a product was renamed after billing.
+      const reportProductCodes = [...new Set(filteredData.map((row) => String(row.productCode || "").trim()).filter(Boolean))];
+      const currentProducts = reportProductCodes.length
+        ? await Product.find({ distributorId, firmId, productCode: { $in: reportProductCodes } }).select("productCode productName").lean()
+        : [];
+      const currentProductNames = new Map(currentProducts.map((product) => [String(product.productCode || "").trim(), product.productName]));
+      filteredData.forEach((row) => {
+        row.productName = currentProductNames.get(String(row.productCode || "").trim()) || row.productName;
+      });
+
       // Sort the data
       if (orderBy === "productCode") {
         filteredData.sort((a, b) => String(a.productCode).localeCompare(String(b.productCode)));
@@ -33633,7 +33867,7 @@ app.get(
             resultData.push({
               _id: `credit-note-${note._id}-${index}`,
               SrNo: 0,
-              ProductName: String(getItemValue(item, "productName", "ProductName", "ProdName", "name") || productMaster.productName || ""),
+              ProductName: String(productMaster.productName || getItemValue(item, "productName", "ProductName", "ProdName", "name") || ""),
               ProductCode: productCode,
               Unit: String(getItemValue(item, "unit", "Unit", "basicUnit") || productMaster.basicUnit || ""),
               LocalProduct: productMaster.localProduct || productMaster.LocalProduct || "",

@@ -44,6 +44,7 @@ import ChartOfAccountsSetup from "./ChartOfAccountsSetup";
 import { csvCell } from "../shared/spreadsheetSafety.js";
 import CatalogReport, { CATALOG_REPORTS } from "./CatalogReport";
 import CommonReportGrid from "./CommonReportGrid";
+import LoadWiseReport, { LOAD_REPORT_NAMES } from "./LoadWiseReport";
 import ReportLoading from "./components/ReportLoading";
 
 const EXCEL_HEADER_COLOR = "1F4E79";
@@ -94,11 +95,6 @@ const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading,
 
   const exportReport = async (format) => {
     setMenuOpen(false);
-    if (ready) {
-      if (format === "csv") exportCsv();
-      else exportExcel();
-      return;
-    }
     await generate();
     setPendingFormat(format);
   };
@@ -5224,6 +5220,8 @@ const Report = ({
         { key: "BillNo", label: "Bill No", type: "string" },
         { key: "PartyCode", label: "Party Code", type: "string" },
         { key: "PartyName", label: "Party Name", type: "string" },
+        { key: "productCode", label: "Product Code", type: "string" },
+        { key: "productName", label: "Product Name", type: "string" },
         { key: "Trn", label: "Trn", type: "string" },
         { key: "Rate", label: "Rate", type: "number" },
         { key: "MRP", label: "MRP", type: "number" },
@@ -8879,23 +8877,7 @@ const Report = ({
                     </button>
 
                     <div className="party-toolbar-export">
-                      <button
-                        type="button"
-                        className="party-export-excel"
-                        onClick={exportProductReportToExcel}
-                        disabled={!isProductReportGenerated || filteredProductReportRows.length === 0}
-                      >
-                        <FileSpreadsheet size={15} /> Excel
-                      </button>
-
-                      <button
-                        type="button"
-                        className="party-export-csv"
-                        onClick={exportProductReportToCsv}
-                        disabled={!isProductReportGenerated || filteredProductReportRows.length === 0}
-                      >
-                        <Download size={15} /> CSV
-                      </button>
+                      <ReportExportActions generate={generateProductSalesReport} exportCsv={exportProductReportToCsv} exportExcel={exportProductReportToExcel} ready={isProductReportGenerated} loading={isProductReportLoading} showGenerate={false} showFilterToggle={false} />
 
                       <button
                         type="button"
@@ -8939,6 +8921,8 @@ const Report = ({
                             <th style={{ minWidth: '70px' }}>Bill No</th>
                             <th style={{ minWidth: '100px' }}>Party Code</th>
                             <th style={{ minWidth: '180px' }}>Party Name</th>
+                            <th>Product Code</th>
+                            <th>Product Name</th>
                             <th style={{ minWidth: '80px' }} className="party-report-number">Rate</th>
                             <th style={{ minWidth: '80px' }} className="party-report-number">MRP</th>
                             <th style={{ minWidth: '70px' }} className="party-report-number">Qty</th>
@@ -8963,6 +8947,8 @@ const Report = ({
                               <td style={{ textAlign: 'center' }}>{row.BillNo ?? row.billNo ?? ''}</td>
                               <td>{row.PartyCode || row.partyCode || ''}</td>
                               <td>{row.PartyName || row.partyName || ''}</td>
+                              <td>{row.productCode || ''}</td>
+                              <td>{row.productName || ''}</td>
                               <td className="party-report-number">{formatReportNumber(row.Rate || row.salesRate || 0)}</td>
                               <td className="party-report-number">{formatReportNumber(row.MRP || row.mrp || 0)}</td>
                               <td className="party-report-number">{formatReportNumber(row.Qty || row.qty || 0)}</td>
@@ -8982,7 +8968,7 @@ const Report = ({
                         {filteredProductReportRows.length > 0 && (
                           <tfoot>
                             <tr>
-                              <td colSpan="6" style={{ fontWeight: 'bold', textAlign: 'right' }}>TOTAL</td>
+                              <td colSpan="8" style={{ fontWeight: 'bold', textAlign: 'right' }}>TOTAL</td>
                               <td className="party-report-number" style={{ fontWeight: 'bold' }}></td>
                               <td className="party-report-number" style={{ fontWeight: 'bold' }}></td>
                               <td className="party-report-number" style={{ fontWeight: 'bold' }}>
@@ -10699,6 +10685,10 @@ const Report = ({
   // =========================================================
   // OTHER REPORTS (Product, Purchase, Stock, etc.)
   // =========================================================
+  if (LOAD_REPORT_NAMES.includes(selectedReport)) {
+    return <LoadWiseReport key={selectedReport} selectedReport={selectedReport} onBack={onBack} />;
+  }
+
   if (CATALOG_REPORTS.some((report) => report.title === selectedReport)) {
     return (
       <CatalogReport

@@ -1,3 +1,5 @@
+import { isBoxLikeSalesUnit } from "../shared/salesBillingRules.js";
+
 const number = (value, label, negative = false) => {
   const result = Number(value ?? 0);
   if (!Number.isFinite(result) || (!negative && result < 0)) throw new Error(`${label} must be a valid number`);
@@ -29,7 +31,7 @@ export const calculateSalesFinancials = (body, rows, { vatMode = "GROSS_AMOUNT",
     const qty = number(row.qty ?? row.quantity ?? row.Qty, `Item ${index + 1} quantity`);
     const free = number(row.free ?? row.Free ?? row.freeQty, `Item ${index + 1} free quantity`);
     const boxPack = number(row.boxPack ?? row.BoxPack ?? 1, `Item ${index + 1} box pack`);
-    const billedQty = String(row.units ?? row.unit ?? "").toLowerCase() === "box" ? qty * (boxPack || 1) : qty;
+    const billedQty = isBoxLikeSalesUnit(row.units ?? row.unit) ? qty * (boxPack || 1) : qty;
     const chargedQty = billedQty + free;
     if (chargedQty <= 0 && !(allowZeroQuantityItems && chargedQty === 0)) throw new Error(`Item ${index + 1} quantity must be positive`);
     const rate = number(row.rate ?? row.salesRate ?? row.SRate, `Item ${index + 1} rate`);

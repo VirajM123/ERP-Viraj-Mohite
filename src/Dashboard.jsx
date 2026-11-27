@@ -1,5 +1,6 @@
 ﻿// Dashboard.jsx
 import React, { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react';
+import { isBoxLikeSalesUnit, salesBillingHeaderError } from "../shared/salesBillingRules.js";
 import { createPortal } from "react-dom";
 import './Dashboard.css';
 import './DashboardMockup.css';
@@ -187,12 +188,29 @@ const DEFAULT_SELECTION_VALUES = [
   "ROUTE",
 ];
 
+/* Keep due dates stable in the date-input format: bill date plus one day. */
+const getInvoiceDueDate = (billDate = businessDateIST()) => {
+  const match = String(billDate || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return "";
+
+  const dueDate = new Date(Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]) + 1
+  ));
+
+  return dueDate.toISOString().slice(0, 10);
+};
+
 /* =========================================================
   AVAILABLE REPORT DEFINITIONS (merged from old Dashboard)
   Keep this outside Dashboard so it is initialized first.
 ========================================================= */
 
 const allReportItems = [
+  { name: "Load Wise Bill Summary", category: "Load", description: "Bill and settlement totals for each load.", icon: ClipboardList },
+  { name: "Loading Wise Collection", category: "Load", description: "Bill-wise collections for selected loads.", icon: ReceiptText },
+  { name: "Load Wise Cancel Report", category: "Load", description: "Product quantities by load and bill.", icon: CircleX },
   {
     name: "Party Wise Sales Report",
     category: "Sales",
@@ -356,6 +374,7 @@ const allReportItems = [
 const reportCatalogCategories = [
   { id: "sales", name: "Sales Reports", description: "Invoices, returns and analysis", icon: FileBarChart },
   { id: "purchase", name: "Purchase Reports", description: "Purchases and supplier analysis", icon: ShoppingCart },
+  { id: "load", name: "Load Reports", description: "Load, settlement and collection reports", icon: Truck },
   { id: "stock", name: "Inventory and Stock", description: "Stock, movement and valuation", icon: Box },
   { id: "customer", name: "Customers and Receivables", description: "Customer and outstanding reports", icon: UserRound },
   { id: "supplier", name: "Suppliers and Payables", description: "Supplier and payable reports", icon: Truck },
@@ -370,6 +389,7 @@ const reportCatalogCategories = [
 const getReportCatalogCategory = (report) => {
   if (report.category === "Sales") return "sales";
   if (report.category === "Purchase") return "purchase";
+  if (report.category === "Load") return "load";
   if (report.category === "Stock") return "stock";
   if (report.category === "GST") return "gst";
   if (report.category === "Customer") return "customer";
@@ -3594,8 +3614,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       );
 
       const unit = String(
-        getInvoiceValue(item, ["unit", "units", "basicUnit", "Unit"], "PCS")
+        getInvoiceValue(item, ["units", "unit", "basicUnit", "Unit"], "PCS")
       ).trim().toUpperCase();
+      const boxLikeUnit = isBoxLikeSalesUnit(unit);
 
       const pack = Number(
         getInvoiceValue(
@@ -3605,8 +3626,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         )
       ) || 1;
 
-      // Rates are saved per basic piece. BOX quantities must include boxPack.
-      const rateQuantity = unit === "BOX" ? qty * pack : qty;
+      // Rates are saved per basic piece; box and bag quantities use the pack size.
+      const rateQuantity = boxLikeUnit ? qty * pack : qty;
 
       const rate = Number(
         getInvoiceValue(item, ["rate", "Rate", "salesRate"], 0)
@@ -3636,7 +3657,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         )
       );
 
-      const grossAmount = unit === "BOX"
+      const grossAmount = boxLikeUnit
         ? rateQuantity * rate
         : storedGrossAmount;
 
@@ -3648,7 +3669,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         )
       );
 
-      const taxableAmount = unit === "BOX"
+      const taxableAmount = boxLikeUnit
         ? grossAmount - schemeAmount - cashDiscountAmount
         : storedTaxableAmount;
 
@@ -3703,7 +3724,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         )
       );
 
-      if (unit === "BOX") {
+      if (boxLikeUnit) {
         const gstPercent = Number(
           getInvoiceValue(
             item,
@@ -3853,7 +3874,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
         igstAmount,
 
-        netAmount: unit === "BOX"
+        netAmount: boxLikeUnit
           ? taxableAmount + cgstAmount + sgstAmount + igstAmount
           : Number(
             getInvoiceValue(
@@ -4653,7 +4674,6 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     const uniqueInvoice = (copyNumber) => {
       const productsPerPage = 5;
-      const sourceItems = Array.isArray(bill.items) ? bill.items : (Array.isArray(bill.Items) ? bill.Items : []);
       const itemPages = Array.from(
         { length: Math.max(1, Math.ceil(visibleItems.length / productsPerPage)) },
         (_, pageIndex) => visibleItems.slice(pageIndex * productsPerPage, (pageIndex + 1) * productsPerPage)
@@ -4699,13 +4719,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           <section class="unique-items">
             <table>
               <colgroup>
-                <col style="width:3%"><col style="width:17%"><col style="width:7%"><col style="width:5%"><col style="width:5%"><col style="width:4%"><col style="width:4%"><col style="width:3%"><col style="width:5.5%"><col style="width:5.5%"><col style="width:5%"><col style="width:8%"><col style="width:4%"><col style="width:6%"><col style="width:6%"><col style="width:7%">
+                <col style="width:3%"><col style="width:26%"><col style="width:7%"><col style="width:5.5%"><col style="width:4%"><col style="width:4%"><col style="width:3%"><col style="width:6%"><col style="width:5.5%"><col style="width:5%"><col style="width:8%"><col style="width:4%"><col style="width:6%"><col style="width:6%"><col style="width:7%">
               </colgroup>
-              <thead><tr><th>SR</th><th>Product Name</th><th>HSN</th><th>OldMrp</th><th>MRP</th><th>Unit</th><th>Qty</th><th>Fr.</th><th>Rate</th><th>Disc</th><th>CD</th><th>Taxable</th><th>GST%</th><th>CGST</th><th>SGST</th><th>Net Amt</th></tr></thead>
-              <tbody>${pageItems.map((item, index) => {
-                const oldMrp = getInvoiceValue(sourceItems[pageIndex * productsPerPage + index], ["oldMrp", "OldMrp", "OldMRP", "oldMRP"], "");
-                return `<tr><td>${pageIndex * productsPerPage + index + 1}</td><td class="unique-product">${text(item.productName)}</td><td>${text(item.hsn)}</td><td>${oldMrp === "" ? "-" : money(oldMrp)}</td><td>${money(item.mrp)}</td><td>${text(item.unit)}</td><td>${qty(item.qty)}</td><td>${qty(item.free)}</td><td>${money(item.rate)}</td><td>${money(item.schemeAmount)}</td><td>${money(item.cashDiscountAmount)}</td><td>${money(item.taxableAmount)}</td><td>${percent(safeNumber(item.igstPercent) > 0 ? safeNumber(item.igstPercent) : safeNumber(item.cgstPercent) + safeNumber(item.sgstPercent))}</td><td>${money(item.cgstAmount)}</td><td>${money(item.sgstAmount)}</td><td>${money(item.netAmount)}</td></tr>`;
-              }).join("")}</tbody>
+              <thead><tr><th>SR</th><th>Product Name</th><th>HSN</th><th>MRP</th><th>Unit</th><th>Qty</th><th>Fr.</th><th>Rate</th><th>Disc</th><th>CD</th><th>Taxable</th><th>GST%</th><th>CGST</th><th>SGST</th><th>Net Amt</th></tr></thead>
+              <tbody>${pageItems.map((item, index) => `<tr><td>${pageIndex * productsPerPage + index + 1}</td><td class="unique-product">${text(item.productName)}</td><td>${text(item.hsn)}</td><td>${money(item.mrp)}</td><td>${text(item.unit)}</td><td>${qty(item.qty)}</td><td>${qty(item.free)}</td><td>${money(item.rate)}</td><td>${money(item.schemeAmount)}</td><td>${money(item.cashDiscountAmount)}</td><td>${money(item.taxableAmount)}</td><td>${percent(safeNumber(item.igstPercent) > 0 ? safeNumber(item.igstPercent) : safeNumber(item.cgstPercent) + safeNumber(item.sgstPercent))}</td><td>${money(item.cgstAmount)}</td><td>${money(item.sgstAmount)}</td><td>${money(item.netAmount)}</td></tr>`).join("")}</tbody>
             </table>
           </section>
           ${pageIndex === itemPages.length - 1 ? `<footer class="unique-footer">
@@ -6143,7 +6160,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               max-height: none;
               padding: 2mm 3mm;
               overflow: visible;
-              font: 11px/1.16 "Courier New", monospace;
+              font: 13px/1.16 "Courier New", monospace;
             }
             .invoice-report-unique_a5, .invoice-report-unique_a5 * {
               font-family: "Courier New", monospace !important;
@@ -6154,9 +6171,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               border: 0;
             }
             .unique-firm { padding: 0 2mm 0 0; }
-            .unique-firm > strong { font-size: 13px; margin-bottom: .4mm; }
+            .unique-firm > strong { font-size: 15px; margin-bottom: .4mm; }
             .unique-meta { padding: 0 0 0 1mm; border: 0; }
-            .unique-meta > strong { font-size: 14px; letter-spacing: 0; text-align: left; margin-bottom: 1mm; }
+            .unique-meta > strong { font-size: 16px; letter-spacing: 0; text-align: left; margin-bottom: 1mm; }
             .unique-meta > div { grid-template-columns: 24mm 2mm 1fr; min-height: 3.1mm; gap: .4mm; }
             .unique-firm-gstin {
               border-top: .2mm dashed #000;
@@ -6172,8 +6189,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               padding: .3mm 0 0;
               border: 0;
             }
-            .unique-party-card { font-size: 11px; line-height: 1.15; }
-            .unique-party-card > strong { font-size: 11px; margin: 0; }
+            .unique-party-card { font-size: 13px; line-height: 1.15; }
+            .unique-party-card > strong { font-size: 13px; margin: 0; }
             .unique-party-qr { display: flex; align-items: center; justify-content: center; }
             .unique-party-qr img { width: 24mm; height: 24mm; object-fit: contain; }
             .unique-salesman { text-align: center; min-height: 3mm; }
@@ -6182,7 +6199,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               height: auto;
               padding: .4mm .15mm;
               border: 0;
-              font: 11px/1.13 "Arial Narrow", Arial, sans-serif !important;
+              font: 13px/1.13 "Arial Narrow", Arial, sans-serif !important;
               vertical-align: top;
               overflow: visible;
               white-space: normal;
@@ -6190,9 +6207,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             }
             .unique-items th { height: 4mm; border-bottom: .2mm solid #000; font-weight: normal; text-align: center; }
             .unique-items th:nth-child(2), .unique-items td.unique-product { text-align: left; }
-            .unique-items td:first-child, .unique-items td:nth-child(6),
-            .unique-items td:nth-child(7), .unique-items td:nth-child(8),
-            .unique-items td:nth-child(13) { text-align: center; }
+            .unique-items td:first-child, .unique-items td:nth-child(5),
+            .unique-items td:nth-child(6), .unique-items td:nth-child(7),
+            .unique-items td:nth-child(12) { text-align: center; }
             .unique-footer {
               display: grid;
               grid-template-columns: minmax(0, 1fr) 51mm;
@@ -6200,7 +6217,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               min-height: 37mm;
               padding: 0;
               border: 0;
-              font-size: 11px;
+              font-size: 13px;
               line-height: 1.15;
             }
             .unique-discounts {
@@ -6213,7 +6230,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               border-top: .2mm solid #000;
               border-bottom: .2mm solid #000;
               flex-wrap: wrap;
-              font-size: 10px;
+              font-size: 12px;
             }
             .unique-discounts span { white-space: nowrap; }
             .unique-bank { grid-column: 1 / -1; grid-row: 2; margin: .5mm 0; overflow-wrap: anywhere; }
@@ -6225,8 +6242,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .unique-totals { grid-column: 2; grid-row: 3; padding: 0; border: 0; }
             .unique-totals > div { grid-template-columns: minmax(0, 1fr) 24mm; min-height: 2.7mm; gap: .5mm; }
             .unique-totals > div > :last-child { text-align: right; white-space: nowrap; }
-            .unique-net-total { margin-top: .4mm; padding: 0; border: 0; font-size: 12px; }
-            .unique-gst-note { grid-column: 1 / -1; grid-row: 4; margin-top: 1mm; text-align: center; font: 11px Arial, sans-serif !important; }
+            .unique-net-total { margin-top: .4mm; padding: 0; border: 0; font-size: 14px; }
+            .unique-gst-note { grid-column: 1 / -1; grid-row: 4; margin-top: 1mm; text-align: center; font: 13px Arial, sans-serif !important; }
 
             @media print {
               html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
@@ -8534,6 +8551,13 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   // Add this state with other state declarations (around line 50-60)
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [currentReceiptItem, setCurrentReceiptItem] = useState(null);
+  const [receiptLookups, setReceiptLookups] = useState({ customerBanks: [], otherAccounts: [], salesmen: [] });
+  const loadReceiptLookups = async () => {
+    const response = await secureFetch(`${API_URL}/receipt/lookups`, { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.message || "Unable to load receipt details.");
+    setReceiptLookups({ customerBanks: result.customerBanks || [], otherAccounts: result.otherAccounts || [], salesmen: result.salesmen || [] });
+  };
   const [receiptFormData, setReceiptFormData] = useState({
     // Receipt Header
     receiptDate: businessDateIST(),
@@ -8867,7 +8891,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     BillSeries: '',
     billNo: '',
     billType: 'Credit',
-    dueDate: '',
+    dueDate: getInvoiceDueDate(businessDateIST()),
     salesman: '',
     narration: ''
   });
@@ -9448,7 +9472,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
       billNo: "",
       billType: "Credit",
-      dueDate: "",
+      dueDate: getInvoiceDueDate(businessDateIST()),
 
       salesman: "",
       salesmanCode: "",
@@ -11493,6 +11517,16 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     if (!currentItem) return;
 
+    if (
+      ["pending", "adjust", "cancel"].includes(field) &&
+      isSettleLoadItemFinalized(currentItem)
+    ) {
+      alert(
+        "This bill already has a settlement action. It cannot be changed or collected again from this settlement."
+      );
+      return;
+    }
+
     const originalBillAmount = Number(
       currentItem.originalBillAmount ??
       currentItem.BillAmount ??
@@ -11656,14 +11690,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setSettleLoadItems(updatedItems);
     calculateSettleLoadSummary(updatedItems);
   };
-  const bankCashAccounts = otherAccounts.filter((acc) => {
+  const bankCashAccounts = receiptLookups.otherAccounts.filter((acc) => {
     const group = String(acc.accountGroup || "").trim().toUpperCase();
     return group === "BANK ACCOUNTS";
   });
   const getNextReceiptNo = async () => {
     const { distributorId, firmId } = getFirmSession();
 
-    const res = await fetch(
+    const res = await secureFetch(
       `${API_URL}/receipt/next-no?distributorId=${distributorId}&firmId=${firmId}`
     );
 
@@ -11682,17 +11716,17 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       billAmount: String(item.billAmount || 0),
     });
 
-    const res = await fetch(`${API_URL}/receipt/bill-balance?${params.toString()}`);
+    const res = await secureFetch(`${API_URL}/receipt/bill-balance?${params.toString()}`);
     const result = await res.json();
 
     if (!res.ok || !result.success) {
-      return Number(item.billAmount || 0) - Number(item.receiptAmount || 0);
+      throw new Error(result.message || "Unable to check the bill balance.");
     }
 
     return Number(result.pendingAmount || 0);
   };
 
-  const handleReceiptSubmit = (event) => {
+  const handleReceiptSubmit = async (event) => {
     if (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -11701,6 +11735,22 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     if (!currentReceiptItem) return;
 
     const { index, item } = currentReceiptItem;
+
+    if (isSettleLoadItemFinalized(item)) {
+      alert(
+        "This bill already has a settlement action. A receipt cannot be taken again."
+      );
+      return;
+    }
+
+    if (!receiptFormData.ourBankAccount) {
+      alert("Please select Cash or a bank account.");
+      return;
+    }
+    if (receiptFormData.ourBankAccount !== "cash" && !String(receiptFormData.chequeNo || "").trim()) {
+      alert("Cheque number is required for a bank receipt.");
+      return;
+    }
 
     const originalBillAmount = Number(
       item.originalBillAmount ??
@@ -11726,10 +11776,13 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       item.receiptAmount || 0
     );
 
-    const availablePendingAmount = Math.max(
-      originalBillAmount - alreadyReceived,
-      0
-    );
+    let availablePendingAmount;
+    try {
+      availablePendingAmount = Math.max(await getBillPendingAmount(item) - alreadyReceived, 0);
+    } catch (error) {
+      alert(error.message || "Unable to check the bill balance. Please try again.");
+      return;
+    }
 
     if (finalReceiptAmount <= 0) {
       alert("Receipt amount must be greater than 0.");
@@ -11749,7 +11802,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       alreadyReceived + finalReceiptAmount;
 
     const newPendingAmount = Math.max(
-      originalBillAmount - totalReceiptAmount,
+      availablePendingAmount - finalReceiptAmount,
       0
     );
 
@@ -11817,6 +11870,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           micr: receiptFormData.micr || "",
 
           salesman:
+            receiptLookups.salesmen.find((s) =>
+              [s.salesmanCode, s.code, s.salesmanName, s.name].some((candidate) =>
+                String(candidate || "").trim().toLowerCase() === String(receiptFormData.salesman || "").trim().toLowerCase()
+              )
+            )?.salesmanName ||
             receiptFormData.salesman ||
             currentBill.salesman ||
             "",
@@ -12301,7 +12359,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         sr: index + 1,
 
         adjust: "N",
-        pending: "Y",
+        pending: "N",
         cancel: "N",
 
         receiptSeries: "",
@@ -12452,6 +12510,20 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     }
 
     return "Pending";
+  };
+
+  /* Settlement decisions affect receipt/allocation records and are immutable
+     from this screen once one has been made for a bill. */
+  const isSettleLoadItemFinalized = (item = {}) => {
+    const status = String(item.status || "").trim().toLowerCase();
+
+    return (
+      item.cancel === "Y" ||
+      item.pending === "Y" ||
+      item.adjust === "Y" ||
+      Number(item.receiptAmount || item.receivedAmount || 0) > 0 ||
+      ["cancelled", "received", "partial", "adjusted", "receipt"].includes(status)
+    );
   };
   const saveSettleLoad = async () => {
     try {
@@ -13838,12 +13910,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ["categories", ["Product", "Category Master"].includes(screen), loadCategories],
       ["products", transactionForm, loadProducts],
       ["accounts", accountPermission.view && (transactionForm || openFormFor === "Account" || screen === "Area To Party"), loadAccounts],
-      ["otherAccounts", ["Other Account", "Company Master", "Purchase", "Receipt"].includes(screen), loadOtherAccounts],
+      ["otherAccounts", ["Other Account", "Company Master", "Purchase"].includes(screen), loadOtherAccounts],
       ["gst", screen === "GST Master", loadGst],
       ["salesmen", transactionForm || screen === "Salesman" || screen === "Salesman To Area", loadSalesmen],
       ["areas", ["Area", "Account", "Salesman To Area", "Area To Party"].includes(screen), loadAreas],
       ["godowns", transactionForm || screen === "GoDown Master", loadGodowns],
-      ["customerBanks", screen === "Customer Bank Master" || transactionForm, loadCustomerBanks],
+      ["customerBanks", screen === "Customer Bank Master", loadCustomerBanks],
     ];
     lookupLoaders.forEach(([key, needed, loader]) => {
       if (needed && !loadedDashboardLookups.current.has(key)) {
@@ -13851,7 +13923,13 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         void loader();
       }
     });
-  }, [activeSubMenu, openFormFor, accountPermission.view]);
+  }, [activeSubMenu, openFormFor, activeTransactionMenu, showSettleLoad, accountPermission.view]);
+
+  useEffect(() => {
+    if (activeMenu === "transactions" && activeSubMenu === "Receipt" && activeTransactionMenu === "Receipt") {
+      void loadReceiptLookups().catch((error) => alert(error.message));
+    }
+  }, [activeMenu, activeSubMenu, activeTransactionMenu]);
   // Add this useEffect near other useEffects (around line 300-350)
   useEffect(() => {
     // Load areas when Account form is opened
@@ -20985,6 +21063,25 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     ) {
       return;
     }
+
+    if (name === "billDate") {
+      setInvoiceFormData((previousFormData) => {
+        const updatedFormData = {
+          ...previousFormData,
+          billDate: cleanValue,
+          dueDate: getInvoiceDueDate(cleanValue),
+        };
+
+        updateActiveInvoiceDraft({
+          formData: cloneInvoiceDraftValue(updatedFormData),
+        });
+
+        return updatedFormData;
+      });
+
+      return;
+    }
+
     if (name === "company") {
       const selectedCompanyCode = String(
         cleanValue || ""
@@ -21305,7 +21402,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     const unit = String(item.units || item.unit || "").toLowerCase();
 
-    if (unit === "box") {
+    if (isBoxLikeSalesUnit(unit)) {
       return (qty * boxPack) + free;
     }
 
@@ -25081,7 +25178,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         }
       }
 
-      const selectedArea = areas.find(
+      const selectedArea = invoiceAreaPartyMappings.find(
+        (mapping) =>
+          invoiceMappingKey(mapping.areaCode) === invoiceMappingKey(invoiceFormData.area) ||
+          invoiceMappingKey(mapping.areaName) === invoiceMappingKey(invoiceFormData.area)
+      ) || areas.find(
         (a) =>
           a.name === invoiceFormData.area ||
           a.areaName === invoiceFormData.area ||
@@ -25097,6 +25198,20 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           s.salesmanCode === invoiceFormData.salesman
       );
 
+      const areaCode = String(invoiceFormData.area || "").trim()
+        ? selectedArea?.code || selectedArea?.areaCode || "" : "";
+      const salesmanCode = String(invoiceFormData.salesman || "").trim()
+        ? selectedSalesman?.code || selectedSalesman?.salesmanCode || "" : "";
+      const headerError = salesBillingHeaderError({
+        areaCode,
+        salesmanCode,
+        entryType: activeSubMenu === "Counter Sales" ? "COUNTER_SALES" : "BILLING",
+      });
+      if (headerError) {
+        alert(headerError);
+        return;
+      }
+
       const validItems = invoiceItems
         .filter(isValidInvoiceItem)
         .map((item) => {
@@ -25106,6 +25221,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
           return {
             ...item,
+            unit: item.units || item.unit || "PCS",
             productCode:
               item.productCode ||
               item.productId ||
@@ -25529,7 +25645,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           ? "MIX"
           : selectedCompany?.name || selectedCompany?.companyName || invoiceFormData.company || "",
 
-        AreaCode: selectedArea?.code || selectedArea?.areaCode || "",
+        AreaCode: areaCode,
         AreaName: selectedArea?.name || selectedArea?.areaName || invoiceFormData.area,
 
         PartyCode: selectedParty?.accountCode || "",
@@ -25544,7 +25660,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
             : "BILLING",
         DueDate: invoiceFormData.dueDate,
 
-        SalesmanCode: selectedSalesman?.code || selectedSalesman?.salesmanCode || "",
+        SalesmanCode: salesmanCode,
         SalesmanName:
           selectedSalesman?.name ||
           selectedSalesman?.salesmanName ||
@@ -25962,6 +26078,15 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       const companyValue =
         invoiceFormData.company;
 
+      const areaValue =
+        invoiceFormData.area;
+
+      const areaCodeValue =
+        invoiceFormData.areaCode ||
+        selectedArea?.code ||
+        selectedArea?.areaCode ||
+        "";
+
       const billSeriesValue =
         invoiceFormData.BillSeries;
 
@@ -25986,18 +26111,21 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       // ✅ RESET INVOICE ITEMS (EMPTY ARRAY)
       setInvoiceItems([]);
 
-      // ✅ RESET FORM BUT KEEP: Company, BillSeries, Godown, BillType
+      // Keep the selected area for the next bill; only the party is cleared.
       setInvoiceFormData({
         billDate: new Date().toISOString().split('T')[0],
         godown: godownValue || 'G1',
-        company: companyValue, // ✅ KEEP COMPANY
-        area: '', // ✅ RESET AREA
-        party: '', // ✅ RESET PARTY (THIS WILL GET FOCUS)
+        company: companyValue,
+        area: areaValue,
+        areaCode: areaCodeValue,
+        party: '',
+        partyCode: '',
+        partyName: '',
         BillSeries: billSeriesValue || '',
         billNo: String(nextBillNo), // ✅ AUTO-INCREMENT
         billType: billTypeValue || 'Credit',
-        dueDate: '', // ✅ RESET
-        salesman: '', // ✅ RESET
+        dueDate: getInvoiceDueDate(new Date().toISOString().split('T')[0]),
+        salesman: '',
         narration: '' // ✅ RESET
       });
       setIsInvoiceSalesmanFirstSelection(false);
@@ -41366,6 +41494,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
                   totalBills,
 
+                  itemCount: totalBills,
+
                   /*
                   * Bills are excluded by
                   * /api/create-load/list.
@@ -42562,6 +42692,15 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     columnKey,
     rowIndex
   ) => {
+    // These are manual collection-entry columns on the party-wise printout.
+    // Keep them empty for the collection person instead of pre-filling 0.00.
+    if (
+      printLoadFormData.reportLevel === "party_wise" &&
+      ["cash", "cheque", "upi"].includes(columnKey)
+    ) {
+      return "";
+    }
+
     if (["unitQty", "qty", "cases", "totalQty", "boxPack"].includes(columnKey) && row[columnKey] === null) return "-";
     const value = getPrintLoadValue(
       row,
@@ -42631,6 +42770,18 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     if (mediumColumns.includes(columnKey)) return 14;
     if (["srNo", "mrp", "qty", "unitQty", "totalQty", "weight"].includes(columnKey)) return 9;
     return 12;
+  };
+
+  const getPrintLoadTableFontSize = (columns = []) => {
+    const totalWeight = columns.reduce(
+      (sum, column) => sum + getPrintLoadColumnWeight(column.key),
+      0
+    );
+
+    if (totalWeight <= 105) return "11pt";
+    if (totalWeight <= 150) return "10pt";
+    if (totalWeight <= 190) return "9pt";
+    return "8pt";
   };
 
   const selectedPrintLoadColumnOptions =
@@ -42745,7 +42896,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     if (!printContent) return;
 
     const printFrame = document.createElement("iframe");
-    printFrame.style.cssText = "position:fixed;left:-10000px;top:0;width:1px;height:1px;border:0";
+    printFrame.style.cssText = "position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0";
     document.body.appendChild(printFrame);
     const printWindow = printFrame.contentWindow;
 
@@ -42754,14 +42905,14 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           <head>
             <title>Print Load</title>
             <style>
-              @page { size: A4 portrait; margin: 8mm; }
+              @page { size: A4 portrait; margin: 5mm; }
               * { box-sizing: border-box; }
-              html, body { width: 194mm; margin: 0; padding: 0; }
-              body { color: #000; font: 10pt Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .print-load-document-page { width: 194mm; min-height: 281mm; break-after: page; }
+              html, body { width: 100%; margin: 0; padding: 0; }
+              body { color: #000; font: 10.5pt Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .print-load-document-page { width: 200mm; min-height: 287mm; margin: 0; break-after: page; }
               .print-load-document-page:last-child { break-after: auto; }
-              .print-load-document-header h1 { font-size: 14pt; margin: 0 0 3mm; }
-              .print-load-document-details { font-size: 9.5pt; line-height: 1.35; margin-bottom: 4mm; }
+              .print-load-document-header h1 { font-size: 15pt; margin: 0 0 3mm; }
+              .print-load-document-details { font-size: 10.5pt; line-height: 1.35; margin-bottom: 4mm; }
               .print-load-header-gap { margin-left: 6mm; }
               .print-load-document-table-wrap { width: 100%; }
               table {
@@ -58157,7 +58308,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           totalAmount:
             Number.isFinite(amount) ? amount : 0,
 
-          itemCount: sourceBills.length,
+          /* The paginated API intentionally omits Bills.  Fall back to the
+             persisted header total so valid loads never display as zero. */
+          itemCount:
+            sourceBills.length ||
+            Number(
+              original.TotalBills ??
+              original.totalBills ??
+              item.totalBills ??
+              item.TotalBills ??
+              0
+            ) ||
+            0,
 
           status:
             original.Status ||
@@ -64384,6 +64546,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               String(item.status || "").toLowerCase() ===
                               "cancelled";
 
+                            const settlementActionFinalized =
+                              isSettleLoadItemFinalized(item);
+
                             const shownBillAmount = Number(
                               item.billAmount ??
                               item.BillAmount ??
@@ -64457,7 +64622,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="settle-row-button settle-adjust-button"
-                                      disabled={isCancelled}
+                                      disabled={settlementActionFinalized}
                                       onClick={() => {
                                         setSelectedSettleBillIndex(index);
                                         setSettleAdjustRowIndex(index);
@@ -64470,7 +64635,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="settle-row-button settle-pending-button"
-                                      disabled={isCancelled}
+                                      disabled={settlementActionFinalized}
                                       onClick={() => {
                                         setSelectedSettleBillIndex(index);
 
@@ -64487,9 +64652,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="settle-row-button settle-receipt-button"
-                                      disabled={isCancelled}
+                                      disabled={settlementActionFinalized}
                                       onClick={async () => {
                                         setSelectedSettleBillIndex(index);
+
+                                        try {
+                                          await loadReceiptLookups();
+                                        } catch (error) {
+                                          alert(error.message);
+                                          return;
+                                        }
 
                                         const currentPendingAmount = Math.max(
                                           Number(
@@ -64542,6 +64714,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                           discount: 0,
 
                                           salesman:
+                                            item.salesman ||
+                                            item.salesmanName ||
+                                            item.SalesmanName ||
                                             getSalesmanForCustomer(
                                               item.partyCode ||
                                               item.PartyCode,
@@ -64564,19 +64739,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="settle-row-button settle-cancel-button"
+                                      disabled={settlementActionFinalized}
                                       onClick={() => {
                                         setSelectedSettleBillIndex(index);
 
                                         updateSettleLoadItem(
                                           index,
                                           "cancel",
-                                          isCancelled ? "N" : "Y"
+                                          "Y"
                                         );
                                       }}
                                     >
-                                      {isCancelled
-                                        ? "Restore"
-                                        : "Cancel"}
+                                      {isCancelled ? "Cancelled" : "Cancel"}
                                     </button>
                                   </div>
                                 </td>
@@ -64692,6 +64866,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   <input
                                     type="checkbox"
                                     checked={isCancelled}
+                                    disabled={settlementActionFinalized}
                                     onChange={(event) => {
                                       setSelectedSettleBillIndex(index);
 
@@ -64976,14 +65151,25 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <label>SALESMAN</label>
                       <select
                         className="erp-input"
-                        value={receiptFormData.salesman || ""}
+                        value={(() => {
+                          const value = String(receiptFormData.salesman || "").trim();
+                          const salesman = receiptLookups.salesmen.find((s) =>
+                            [s.salesmanCode, s.code, s.salesmanName, s.name].some((candidate) =>
+                              String(candidate || "").trim().toLowerCase() === value.toLowerCase()
+                            )
+                          );
+                          return salesman?.name || salesman?.salesmanName || value;
+                        })()}
                         onChange={(e) =>
                           setReceiptFormData({ ...receiptFormData, salesman: e.target.value })
                         }
                       >
                         <option value="">Select Salesman</option>
-                        {salesmen.map((s) => (
-                          <option key={s.id || s.code} value={s.name || s.salesmanName}>
+                        {receiptFormData.salesman && !receiptLookups.salesmen.some((s) =>
+                          [s.name, s.salesmanName, s.code, s.salesmanCode].some((name) => String(name || "").trim().toLowerCase() === String(receiptFormData.salesman).trim().toLowerCase())
+                        ) && <option value={receiptFormData.salesman}>{receiptFormData.salesman}</option>}
+                        {receiptLookups.salesmen.map((s) => (
+                          <option key={s.id || s._id || s.code || s.salesmanCode} value={s.name || s.salesmanName}>
                             {s.name || s.salesmanName}
                           </option>
                         ))}
@@ -65002,6 +65188,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             ...receiptFormData,
                             ourBankAccount: value,
                             bankName: value === "cash" ? "" : value,
+                            ...(value === "cash" ? { chequeNo: "", chequeDate: "", drawerBank: "", drawerBankCode: "", micr: "" } : {}),
                           });
                         }}
                       >
@@ -65033,6 +65220,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <input
                         className="erp-input"
                         value={receiptFormData.chequeNo || ""}
+                        disabled={receiptFormData.ourBankAccount === "cash"}
                         onChange={(e) =>
                           setReceiptFormData({ ...receiptFormData, chequeNo: e.target.value })
                         }
@@ -65045,6 +65233,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         className="erp-input"
                         type="date"
                         value={receiptFormData.chequeDate || ""}
+                        disabled={receiptFormData.ourBankAccount === "cash"}
                         onChange={(e) =>
                           setReceiptFormData({ ...receiptFormData, chequeDate: e.target.value })
                         }
@@ -65055,11 +65244,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <label>DRAWER BANK</label>
                       <select
                         className="erp-input"
-                        value={receiptFormData.drawerBankCode || customerBanks.find(
+                        disabled={receiptFormData.ourBankAccount === "cash"}
+                        value={receiptFormData.drawerBankCode || receiptLookups.customerBanks.find(
                           (bank) => bank.bankName === receiptFormData.drawerBank
                         )?.bankCode || ""}
                         onChange={(e) => {
-                          const selectedBank = customerBanks.find(
+                          const selectedBank = receiptLookups.customerBanks.find(
                             (b) => b.bankCode === e.target.value
                           );
 
@@ -65074,7 +65264,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       >
                         <option value="">Select Customer Bank</option>
 
-                        {customerBanks.map((bank) => (
+                        {receiptLookups.customerBanks.map((bank) => (
                           <option
                             key={bank.id || bank._id || bank.bankCode}
                             value={bank.bankCode}
@@ -65089,6 +65279,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <input
                         className="erp-input"
                         value={receiptFormData.micr || ""}
+                        disabled={receiptFormData.ourBankAccount === "cash"}
                         onChange={(e) =>
                           setReceiptFormData({ ...receiptFormData, micr: e.target.value })
                         }
@@ -69491,7 +69682,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   COMPACT TABLE
                                   ===================================== */}
                                       <div className="print-load-document-table-wrap">
-                                        <table className="print-load-document-table" style={{ "--load-table-font": printLoadFormData.reportLevel === "product_wise" && pageColumns.length <= 6 ? "10pt" : pageColumns.length > 16 ? "6.5pt" : pageColumns.length > 12 ? "7.25pt" : "8.5pt" }}>
+                                        <table className="print-load-document-table" style={{ "--load-table-font": getPrintLoadTableFontSize(pageColumns) }}>
                                           <colgroup>
                                             {pageColumns.map((column) => (
                                               <col
@@ -72521,11 +72712,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {activeMenu === "transactions" && activeSubMenu === activeTransactionMenu && (
               <Transaction
                 salesInvoices={salesListData}
-                salesmen={salesmen}
+                salesmen={activeTransactionMenu === "Receipt" ? receiptLookups.salesmen : salesmen}
                 areas={areas}
                 accounts={accounts}
-                otherAccounts={otherAccounts}
-                customerBanks={customerBanks}
+                otherAccounts={activeTransactionMenu === "Receipt" ? receiptLookups.otherAccounts : otherAccounts}
+                customerBanks={activeTransactionMenu === "Receipt" ? receiptLookups.customerBanks : customerBanks}
                 activeTransaction={activeTransactionMenu}
                 setActiveTransaction={setActiveTransactionMenu}
                 openFormFor={openFormFor}
@@ -77815,6 +78006,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                         <option value="BOX">
                                           BOX
+                                        </option>
+
+                                        <option value="BAG">
+                                          BAG
                                         </option>
 
                                         <option value="INBOX">

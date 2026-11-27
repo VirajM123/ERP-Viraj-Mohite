@@ -107,7 +107,7 @@ export const buildProductSalesSummaryPipeline = (match, selectedProductCodes, or
       { $match: { $expr: { $eq: ["$productCode", "$$code"] } } },
       { $project: { _id: 0, productName: 1 } },
     ], as: "master" } },
-    { $set: { productName: { $cond: [{ $ne: ["$productName", ""] }, "$productName", { $ifNull: [{ $arrayElemAt: ["$master.productName", -1] }, ""] }] } } },
+    { $set: { productName: { $let: { vars: { current: { $ifNull: [{ $arrayElemAt: ["$master.productName", -1] }, ""] } }, in: { $cond: [{ $ne: ["$$current", ""] }, "$$current", "$productName"] } } } } },
     { $set: { sortText: { $toLower: { $trim: { input: { $convert: { input: `$${sortField}`, to: "string", onError: "", onNull: "" } } } } } } },
     { $sort: { [sortDirection < 0 ? sortField : "sortText"]: sortDirection, firstBillDate: 1, firstBillSeries: 1, firstBillNo: 1, firstBillId: 1, firstItemIndex: 1 } },
     { $project: { _id: 0, rowId: "$productCode", srNo: 1, productCode: 1, productName: 1, qty: 1, amt: 1, tprAmt: 1, cdAmt: 1,
@@ -386,7 +386,7 @@ const createProductSalesReportRouter = (securityRouter) => {
               { $project: { _id: 0, productName: 1 } },
             ], as: "master" } },
             { $set: {
-              sortName: { $toLower: { $trim: { input: { $cond: [{ $ne: ["$savedProductName", ""] }, "$savedProductName", { $ifNull: [{ $arrayElemAt: ["$master.productName", -1] }, ""] }] } } } },
+              sortName: { $toLower: { $trim: { input: { $let: { vars: { current: { $ifNull: [{ $arrayElemAt: ["$master.productName", -1] }, ""] } }, in: { $cond: [{ $ne: ["$$current", ""] }, "$$current", "$savedProductName"] } } } } } },
               sortCode: { $toLower: "$productCode" },
               sortQty: numericValue(["qty", "Qty", "quantity", "Quantity", "saleQty", "SaleQty"]),
               sortAmt: grossExpression,
@@ -446,7 +446,7 @@ const createProductSalesReportRouter = (securityRouter) => {
             }
 
             const productMaster = productMasterMap.get(productCode);
-            const productName = savedProductName || productMaster?.productName || "";
+            const productName = productMaster?.productName || savedProductName || "";
 
             const qty = toNumber(
               getItemValue(item, "qty", "Qty", "quantity", "Quantity", "saleQty", "SaleQty")

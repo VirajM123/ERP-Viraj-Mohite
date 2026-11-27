@@ -1,3 +1,5 @@
+import { isBoxLikeSalesUnit } from "../shared/salesBillingRules.js";
+
 const firstValue = (source, keys) => {
   for (const key of keys) {
     const value = source?.[key];
@@ -37,7 +39,7 @@ export const getPartySalesDetailValues = (item = {}, product = {}, stock = {}) =
   const legacyQty = optionalNumber(item, "OQty", "oQty");
   const reportQty =
     legacyQty ??
-    (unit.toLowerCase() === "box" ? billQty * boxPack : billQty);
+    (isBoxLikeSalesUnit(unit) ? billQty * boxPack : billQty);
   const reportRate =
     optionalNumber(item, "ORate", "oRate", "unitRate", "UnitRate", "rate", "Rate") ??
     number(item, "salesRate", "SalesRate", "saleRate", "SaleRate");
