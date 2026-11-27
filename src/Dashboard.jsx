@@ -15447,27 +15447,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     };
   };
   const prepareBillPrintData = async () => {
-    const loadedResult =
-      await loadBillPrintDataByLoad(
-        billPrintFormData
-      );
-
-    if (!loadedResult) {
-      return null;
-    }
-
-    try {
-      await saveBillPrintSettings(
-        loadedResult.updatedForm
-      );
-    } catch (settingsError) {
-      console.warn(
-        "Bill Print settings could not be saved:",
-        settingsError
-      );
-    }
-
-    return loadedResult;
+    return loadBillPrintDataByLoad(billPrintFormData);
   };
 
   /* =========================================================
@@ -65601,11 +65581,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <AlertTriangle size={18} />
                         <span>{billPrintError}</span>
                       </div>
-                    ) : billPrintData ? (
-                      <div
+                    ) : billPrintData?.invoiceHtml ? (
+                      <iframe
                         className="bill-print-preview-document"
-                        dangerouslySetInnerHTML={{
-                          __html: getBillPrintHTML(),
+                        title="Bill Print preview"
+                        srcDoc={billPrintData.invoiceHtml}
+                        style={{ width: "100%", minHeight: "80vh", border: 0 }}
+                        onLoad={(event) => {
+                          const frame = event.currentTarget;
+                          const height = frame.contentDocument?.documentElement?.scrollHeight || 0;
+                          if (height) frame.style.height = `${height}px`;
                         }}
                       />
                     ) : (
