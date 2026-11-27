@@ -34,6 +34,7 @@ import {
 } from "./auth.js";
 import { writeAuditEvent } from "./audit.js";
 import { postBalancedJournal, reverseSourceJournal } from "./accounting.js";
+import { salesLoadStatusCondition } from "../shared/salesLoadStatus.js";
 import { reserveSettlementAllocation } from "./settlementAllocation.js";
 import { nextDocumentNumber } from "./counters.js";
 import { businessDateIST } from "./businessDate.js";
@@ -13586,6 +13587,11 @@ app.get(
         req.query.paymentStatus || ""
       ).trim();
 
+      const loadStatus = String(req.query.loadStatus || "").trim();
+      if (loadStatus && !["not_loaded", "loaded", "cancelled"].includes(loadStatus)) {
+        return res.status(400).json({ success: false, message: "Invalid load status." });
+      }
+
       const minAmountText = String(
         req.query.minAmount || ""
       ).trim();
@@ -14636,19 +14642,28 @@ app.get(
           andConditions;
       }
 
+      const countBaseFilter = { ...filter };
+      delete countBaseFilter.isActive;
+      const withLoadStatus = (status) => ({
+        ...countBaseFilter,
+        $and: [...(countBaseFilter.$and || []), salesLoadStatusCondition(status)],
+      });
+      const selectedFilter = loadStatus ? withLoadStatus(loadStatus) : filter;
+
       /* =====================================================
         COUNT AND PAGINATION
         ===================================================== */
 
-      const loadSalesPage = (pageToLoad) => SalesHeader.find(filter)
+      const loadSalesPage = (pageToLoad) => SalesHeader.find(selectedFilter)
         .select({ items: 0, Items: 0 })
         .sort({ BillDate: -1, BillNo: -1, _id: -1 })
         .skip((pageToLoad - 1) * limit)
         .limit(limit)
         .lean();
-      const [totalRecords, requestedSales] = await Promise.all([
-        SalesHeader.countDocuments(filter),
+      const [totalRecords, requestedSales, loadCounts] = await Promise.all([
+        SalesHeader.countDocuments(selectedFilter),
         loadSalesPage(page),
+        req.query.includeLoadCounts === "1" ? Promise.all(["not_loaded", "loaded", "cancelled"].map((status) => SalesHeader.countDocuments(withLoadStatus(status)))) : Promise.resolve(null),
       ]);
 
       const totalPages = Math.max(
@@ -14690,6 +14705,8 @@ app.get(
         success: true,
 
         sales,
+
+        ...(loadCounts ? { loadCounts: { notLoaded: loadCounts[0], loaded: loadCounts[1], cancelled: loadCounts[2] } } : {}),
 
         count:
           sales.length,

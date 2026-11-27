@@ -1,6 +1,7 @@
 ﻿// Dashboard.jsx
 import React, { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react';
 import { isBoxLikeSalesUnit, salesBillingHeaderError } from "../shared/salesBillingRules.js";
+import { salesLoadStatus } from "../shared/salesLoadStatus.js";
 import { createPortal } from "react-dom";
 import './Dashboard.css';
 import './DashboardMockup.css';
@@ -1912,6 +1913,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     loadNo: "",
     addUser: "",
     paymentStatus: "",
+    loadStatus: "",
     minAmount: "",
     maxAmount: "",
   });
@@ -2039,6 +2041,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   const [salesAppliedFilters, setSalesAppliedFilters] =
     useState(() => createDefaultSalesListFilters());
+
+  const [salesLoadCounts, setSalesLoadCounts] = useState(null);
+  const salesListRequestRef = useRef(0);
 
   const initialEntryDaysApplied = useRef(false);
 
@@ -26351,6 +26356,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         search,
         counterSalesOnly = false,
       } = {}) => {
+        const requestId = ++salesListRequestRef.current;
         try {
           const {
             distributorId,
@@ -26504,6 +26510,11 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
             appliedFilters.paymentStatus
           );
 
+          if (!counterSalesOnly) {
+            appendFilter("loadStatus", appliedFilters.loadStatus);
+            query.set("includeLoadCounts", "1");
+          }
+
           appendFilter(
             "minAmount",
             appliedFilters.minAmount
@@ -26521,6 +26532,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
           const result =
             await response.json();
+
+          if (requestId !== salesListRequestRef.current) return;
 
           if (
             !response.ok ||
@@ -26789,6 +26802,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           setSalesListData(
             normalizedSales
           );
+          setSalesLoadCounts(counterSalesOnly ? null : result.loadCounts || null);
 
           setSalesCurrentPage(
             resolvedPage
@@ -26841,6 +26855,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
             })
           );
         } catch (error) {
+          if (requestId !== salesListRequestRef.current) return;
           console.error(
             "Sales Billing list error:",
             error
@@ -26851,13 +26866,14 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           setSalesTotalPages(1);
           setSalesStartRecord(0);
           setSalesEndRecord(0);
+          setSalesLoadCounts(null);
 
           alert(
             error.message ||
             "Server not connected. Failed to load sales bills."
           );
         } finally {
-          setSalesListLoading(false);
+          if (requestId === salesListRequestRef.current) setSalesListLoading(false);
         }
       },
       [
@@ -54986,7 +55002,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               : isQuotationList
                 ? "is-quotation"
                 : "is-sales"
-            }`}
+            } ${isSalesBillingList && !isCounterSalesList ? "sales-load-status-list" : ""}`}
         >
           <div className="ts-sales-page-header">
             <div>
@@ -54994,6 +55010,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <h1>{pageTitle}</h1>
               <p>{pageSubtitle}</p>
             </div>
+
+            {isSalesBillingList && !isCounterSalesList && <div className="sales-load-counts" aria-label="Load status counts for the current filters">
+              <div className="sales-load-count pending"><Truck size={19} /><span>Not in load: <strong>{salesLoadCounts ? salesLoadCounts.notLoaded.toLocaleString("en-IN") : "—"} invoices</strong></span></div>
+              <div className="sales-load-count loaded"><Truck size={19} /><span>Added to load: <strong>{salesLoadCounts ? salesLoadCounts.loaded.toLocaleString("en-IN") : "—"} invoices</strong></span></div>
+            </div>}
 
             <div className="ts-sales-page-actions">
               {(!isSalesBillingList || salesBillingPermission.add) &&
@@ -55043,6 +55064,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </button>
             </div>
           </div>
+
+          {isSalesBillingList && !isCounterSalesList && <div className="sales-load-tabs" aria-label="Filter invoices by load status">
+            {[
+              ["", "All active invoices", FileText],
+              ["not_loaded", "Not in load", Truck],
+              ["loaded", "Added to load", Truck],
+              ["cancelled", "Cancelled", CircleX],
+            ].map(([value, label, Icon]) => <button key={value} type="button" aria-pressed={(salesAppliedFilters.loadStatus || "") === value} className={`sales-load-tab ${value || "all"} ${(salesAppliedFilters.loadStatus || "") === value ? "active" : ""}`} onClick={() => {
+              setSalesAdvancedFilters((previous) => ({ ...previous, loadStatus: value }));
+              setSalesAppliedFilters((previous) => ({ ...previous, loadStatus: value }));
+              setSalesCurrentPage(1);
+              setListPage((previous) => ({ ...previous, Billing: 1 }));
+            }}><Icon size={17} />{label}{(salesAppliedFilters.loadStatus || "") === value && <CheckCircle2 size={15} />}</button>)}
+          </div>}
 
           {/* ================================================
         FILTER OPEN BUTTON
@@ -56666,7 +56701,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             </div>
           )}
 
-          <div className="ts-summary-grid">
+          {(!isSalesBillingList || isCounterSalesList) && <div className="ts-summary-grid">
             <div className="ts-summary-card blue">
               <div className="ts-summary-icon"><CalendarDays size={22} /></div>
               <div><span>
@@ -56716,7 +56751,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </strong><small>Filtered Result</small></div>
               <i />
             </div>
-          </div>
+          </div>}
 
           <div className="ts-grid-card">
             <div className="ts-grid-scroll">
@@ -56734,6 +56769,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <th>Bill Series</th>
 
                     <th>Bill No</th>
+
+                    {isSalesBillingList && !isCounterSalesList && <th className="sales-load-status-column">Load Status</th>}
 
                     <th>Party Code</th>
 
@@ -56786,7 +56823,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     ) ? (
                     <tr>
                       <td
-                        colSpan={14}
+                        colSpan={isSalesBillingList && !isCounterSalesList ? 15 : 14}
                         className="ts-empty-row"
                       >
                         <RefreshCw
@@ -56818,6 +56855,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           item?.originalItem ||
                           item ||
                           {};
+                        const loadStatus = salesLoadStatus(source);
 
                         const billDate =
                           item.date ||
@@ -57056,6 +57094,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               </button>
                             </td>
 
+                            {isSalesBillingList && !isCounterSalesList && <td className="sales-load-status-column"><span className={`sales-load-badge ${loadStatus}`}>
+                              {loadStatus === "cancelled" ? <CircleX size={14} /> : <Truck size={14} />}
+                              {loadStatus === "cancelled" ? "Cancelled" : loadStatus === "loaded" ? "Added to load" : "Not in load"}
+                            </span></td>}
+
                             <td>
                               {partyCode}
                             </td>
@@ -57125,7 +57168,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 >
                                   <Eye size={15} />
                                 </button>
-                                {(type !== 'Sales' || salesBillingPermission.edit) && 
+                                {(type !== 'Sales' || (salesBillingPermission.edit && loadStatus !== "cancelled")) &&
                                 (type !== 'Quotation' || quotationPermission.edit) &&
                                 (type !== 'Purchase' || purchasePermission.edit) &&
                                  (type !== 'Credit Note' || creditNotePermission.edit) &&
@@ -57238,7 +57281,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </button>
                                   </>
                                 )}
-                                {(type !== 'Sales' || salesBillingPermission.delete) && 
+                                {(type !== 'Sales' || (salesBillingPermission.delete && loadStatus !== "cancelled")) &&
                                 (type !== 'Quotation' || quotationPermission.delete) &&
                                 (type !== 'Purchase' || purchasePermission.delete) &&
                                 (type !== 'Credit Note' || creditNotePermission.delete) &&
@@ -57284,7 +57327,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   ) : (
                     <tr>
                       <td
-                        colSpan={14}
+                        colSpan={isSalesBillingList && !isCounterSalesList ? 15 : 14}
                         className="ts-empty-row"
                       >
                         <ShoppingCart size={32} />
