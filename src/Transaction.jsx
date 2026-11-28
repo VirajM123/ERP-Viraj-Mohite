@@ -384,6 +384,30 @@ if (menu === "PDC Docket") {
   const [showAreaSelectionModal, setShowAreaSelectionModal] = useState(false);
   const [currentSelectionType, setCurrentSelectionType] = useState("");
   const [pdcDocketItems, setPDCDocketItems] = useState([]);
+  const [pdcDocketBanks, setPDCDocketBanks] = useState([]);
+  const [pdcDocketBanksStatus, setPDCDocketBanksStatus] = useState("idle");
+  useEffect(() => {
+    if (activeTransaction !== "PDC Docket" || transactionFormMode?.["PDC Docket"] !== true) return undefined;
+    const controller = new AbortController();
+    setPDCDocketBanks([]);
+    setPDCDocketBanksStatus("loading");
+    secureFetch(`${API_URL}/pdc-docket/bank-accounts`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || !result.success || !Array.isArray(result.banks)) throw new Error(result.message || "Unable to load house banks.");
+        if (!controller.signal.aborted) {
+          setPDCDocketBanks(result.banks);
+          setPDCDocketBanksStatus("ready");
+        }
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError" && !controller.signal.aborted) {
+          console.error("PDC Docket bank lookup error:", error);
+          setPDCDocketBanksStatus("error");
+        }
+      });
+    return () => controller.abort();
+  }, [activeTransaction, transactionFormMode?.["PDC Docket"]]);
   // =========================
   // RECEIPT STATES
   // =========================
@@ -5458,7 +5482,7 @@ const saveChequeBounce =
     ) {
       const selectedBank =
         (
-          bankCashAccounts || []
+          pdcDocketBanks || []
         ).find(
           (account) =>
             normalizeValue(
@@ -16111,7 +16135,11 @@ setTransactionFormMode((prev) => ({
                   Select Bank
                 </option>
 
-                {(bankCashAccounts || []).map(
+                {pdcDocketFormData.houseBank && !pdcDocketBanks.some((account) =>
+                  normalizeBankValue(getBankAccountName(account)) === normalizeBankValue(pdcDocketFormData.houseBank)
+                ) && <option value={pdcDocketFormData.houseBank}>{pdcDocketFormData.houseBank}</option>}
+
+                {pdcDocketBanks.map(
                   (account, index) => {
                     const bankName =
                       getBankAccountName(
@@ -16137,6 +16165,8 @@ setTransactionFormMode((prev) => ({
                   }
                 )}
               </select>
+              {pdcDocketBanksStatus === "loading" && <small>Loading banks…</small>}
+              {pdcDocketBanksStatus === "error" && <small role="alert">Unable to load banks. Reopen PDC Docket to retry.</small>}
             </div>
 
             <div className="pdc-field">

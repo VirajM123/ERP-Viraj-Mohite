@@ -21055,6 +21055,26 @@ receiptSchema.index(
 const Receipt =
   mongoose.models.T_Receipt || mongoose.model("T_Receipt", receiptSchema);
 
+app.get("/api/pdc-docket/bank-accounts", ensureConnection, authorizeReadFor(
+  ["TRANSACTIONS", "PDC_DOCKET", "view"],
+  ["TRANSACTIONS", "PDC_DOCKET", "add"],
+  ["TRANSACTIONS", "PDC_DOCKET", "edit"]
+), async (req, res) => {
+  try {
+    const banks = await OtherAccount.find({
+      distributorId: req.auth.distributorId,
+      firmId: req.auth.firmId,
+      isActive: { $ne: false },
+      accountGroup: /^\s*bank\s+accounts?\s*$/i,
+    }).select("accountCode accountName accountGroup").sort({ accountName: 1 }).lean();
+    res.set("Cache-Control", "no-store");
+    return res.json({ success: true, banks });
+  } catch (error) {
+    console.error("PDC Docket bank lookup error:", error);
+    return res.status(500).json({ success: false, message: "Unable to load house banks." });
+  }
+});
+
 app.get("/api/receipt/lookups", ensureConnection, authorizeReadFor(
   ["TRANSACTIONS", "RECEIPT", "view"], ["TRANSACTIONS", "RECEIPT", "add"],
   ["TRANSACTIONS", "RECEIPT", "edit"], ["SALES", "SETTLE_LOAD", "view"],
