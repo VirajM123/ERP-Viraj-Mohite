@@ -13,6 +13,13 @@ export default function GlobalLoading() {
       <div className="report-generating-circle" />
     </div>
   </div>;
+  if (current.variant === "saving") return <div className="erp-global-loading erp-global-loading--saving" role="status" aria-live="polite" aria-label={current.title}>
+    <div className="erp-saving-panel">
+      <span className="erp-saving-ring" aria-hidden="true" />
+      <strong>{current.title}</strong>
+      <span>{current.message}</span>
+    </div>
+  </div>;
   const ActivityIcon = { invoices: FileText, batches: PackageSearch, validation: ClipboardCheck, preview: FileSearch, saving: ClipboardCheck }[current.variant];
   return <div className="erp-global-loading" role="status" aria-live="polite">
     <div className="erp-loading-panel">

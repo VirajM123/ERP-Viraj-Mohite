@@ -2,7 +2,7 @@
 import React, { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react';
 import { isBoxLikeSalesUnit, salesBillingHeaderError } from "../shared/salesBillingRules.js";
 import { salesLoadStatus } from "../shared/salesLoadStatus.js";
-import { createPortal, flushSync } from "react-dom";
+import { createPortal } from "react-dom";
 import './Dashboard.css';
 import './DashboardMockup.css';
 import './DashboardHorizontalNav.css';
@@ -16,7 +16,6 @@ import SearchablePartySelect from "./components/SearchablePartySelect";
 import UserProfileModal from "./components/UserProfileModal";
 import ScreenLoading from "./components/ScreenLoading";
 import VisualActivity from "./components/VisualActivity";
-import CreateLoadTruckLoader from "./components/CreateLoadTruckLoader";
 import { showSuccessNotice } from "./components/SuccessNotice";
 import { businessDateIST } from "./utils/businessDate";
 import { entryDaysDateRange } from "./utils/entryDaysDateRange";
@@ -439,6 +438,7 @@ const Dashboard = ({ onLogout }) => {
   const [otherAccountActiveTab, setOtherAccountActiveTab] = useState('basic');
   const [transactionFormMode, setTransactionFormMode] = useState({});
   const [transactionEntryRequest, setTransactionEntryRequest] = useState(null);
+  const [transactionWorkspaceOpened, setTransactionWorkspaceOpened] = useState(false);
   const [masterReturnContext, setMasterReturnContext] = useState(null);
   const [showImportData, setShowImportData] = useState(false); // <-- ADD THIS HERE
   const [showDesktopImport, setShowDesktopImport] = useState(false);
@@ -8464,6 +8464,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [activeTransactionMenu, setActiveTransactionMenu] = useState(null);
   const [createLoadDateRangeChanged, setCreateLoadDateRangeChanged] = useState(false);
   const [settleLoadSaved, setSettleLoadSaved] = useState(false);
+  const [isSavingSettleLoad, setIsSavingSettleLoad] = useState(false);
+  const settleLoadSaveInFlight = useRef(false);
+  const unfinishedSettleLoad = useRef(false);
   const [settleLoadListData, setSettleLoadListData] = useState([]);
   const [showSettleLoadList, setShowSettleLoadList] = useState(false);
   const [editingSettleLoadId, setEditingSettleLoadId] = useState(null);
@@ -10757,6 +10760,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     report: false
   });
 
+  useEffect(() => {
+    if (showSettleLoad && activeSubMenu === "Settle Load") {
+      unfinishedSettleLoad.current = true;
+    }
+  }, [showSettleLoad, activeSubMenu]);
+
   const changeSettleBillTypeByF4 = async () => {
     if (!showSettleLoad || settleLoadItems.length === 0) {
       return;
@@ -11913,10 +11922,6 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     setShowReceiptModal(false);
     setCurrentReceiptItem(null);
-
-    alert(
-      "Receipt added temporarily. Click Save Settle Load to save it."
-    );
   };
   const handleSettleAdjustEdit = async (item) => {
     try {
@@ -12561,6 +12566,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     );
   };
   const saveSettleLoad = async () => {
+    if (settleLoadSaveInFlight.current) return;
+
     try {
       const {
         distributorId,
@@ -12753,6 +12760,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         }
       );
 
+      // A second click while the first save is in progress can otherwise
+      // create concurrent settlement transactions for the same load.
+      settleLoadSaveInFlight.current = true;
+      setIsSavingSettleLoad(true);
+
       const response = await secureFetch(
         `${API_URL}/settle-load/save`,
         {
@@ -12821,6 +12833,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         return;
       }
 
+      unfinishedSettleLoad.current = false;
       setSettleLoadSaved(true);
       setOriginalSettleLoadItems(
         JSON.parse(JSON.stringify(settleLoadItems))
@@ -12868,6 +12881,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       alert(
         "Server not connected. No changes were saved."
       );
+    } finally {
+      settleLoadSaveInFlight.current = false;
+      setIsSavingSettleLoad(false);
     }
   };
 
@@ -19706,6 +19722,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   ]
 
   const navigateTransaction = (item, openNew = false) => {
+    setTransactionWorkspaceOpened(true);
     setSidebarCollapsed(true);
     setExpandedNavMenu(null);
     setShowDashboard(false);
@@ -19713,8 +19730,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setActiveSubMenu(item);
     setOpenFormFor(null);
     setActiveTransactionMenu(item);
-    setTransactionFormMode((prev) => ({ ...prev, [item]: false }));
-    if (item === "Receipt") setShowReceiptForm(false);
+    if (openNew) {
+      setTransactionFormMode((prev) => ({ ...prev, [item]: false }));
+      if (item === "Receipt") setShowReceiptForm(false);
+    }
     setTransactionEntryRequest(openNew ? { menu: item } : null);
   };
 
@@ -41095,8 +41114,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         : `${API_URL}/create-load`;
 
       createLoadSaveInFlight.current = true;
-      flushSync(() => setIsSavingCreateLoad(true));
-      const animationStartedAt = performance.now();
+      setIsSavingCreateLoad(true);
       let response;
       let result;
       try {
@@ -41110,14 +41128,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           body: JSON.stringify(payload),
         });
         result = await response.json();
-        if (response.ok && result.success) {
-          const remainingAnimationTime = 1200 - (performance.now() - animationStartedAt);
-          if (remainingAnimationTime > 0) {
-            await new Promise((resolve) => window.setTimeout(resolve, remainingAnimationTime));
-          }
-        }
       } finally {
-        flushSync(() => setIsSavingCreateLoad(false));
+        setIsSavingCreateLoad(false);
       }
 
       if (!response.ok || !result.success) {
@@ -43692,7 +43704,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     /*
   * Save only the form that is actually visible.
   */
-    if (openFormFor === "Billing") {
+    if (openFormFor === "Billing" && !isSettleAdjustMode) {
       saveInvoiceDraft("Billing");
     }
 
@@ -44182,6 +44194,24 @@ if (item === "Import Data") {
       loadAreasForAccount();
     }
     if (item === "Settle Load") {
+      if (unfinishedSettleLoad.current) {
+        setActiveMenu("sales");
+        setShowDashboard(false);
+        setShowCreateLoadList(false);
+        setShowSettleLoadList(false);
+        setShowSettleLoad(true);
+        if (isSettleAdjustMode && editingInvoiceId) {
+          setActiveSubMenu("Billing");
+          setOpenFormFor("Billing");
+        } else {
+          setIsSettleAdjustMode(false);
+          setSettleAdjustRowIndex(null);
+          setActiveSubMenu("Settle Load");
+          setOpenFormFor(null);
+        }
+        return;
+      }
+
       await loadSettleLoadList();
 
       setOpenFormFor(null);
@@ -64464,15 +64494,21 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       type="button"
                       className="settle-top-button settle-top-save"
                       onClick={saveSettleLoad}
+                      disabled={isSavingSettleLoad}
                     >
                       <Save size={15} />
-                      Save
+                      {isSavingSettleLoad ? "Saving..." : "Save"}
                     </button>
 
                     <button
                       type="button"
                       className="settle-top-button"
                       onClick={() => {
+                        unfinishedSettleLoad.current = false;
+                        setIsSettleAdjustMode(false);
+                        setSettleAdjustRowIndex(null);
+                        setShowReceiptModal(false);
+                        setCurrentReceiptItem(null);
                         setShowSettleLoad(false);
                         setOpenFormFor(null);
                         setActiveSubMenu(null);
@@ -64625,6 +64661,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <th className="settle-col-check">
                             Cancel
                           </th>
+                          <th className="settle-col-payment-mode">Payment Mode</th>
                         </tr>
                       </thead>
 
@@ -64632,7 +64669,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         {settleLoadItems.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={13}
+                              colSpan={14}
                               className="settle-premium-empty"
                             >
                               Enter Load Series and Load No to load bills
@@ -64992,6 +65029,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       }`}
                                   />
                                 </td>
+                                <td className="settle-payment-mode-cell">
+                                  {item.receiptMode || item.paymentMode || "—"}
+                                </td>
                               </tr>
                             );
                           })
@@ -65172,51 +65212,21 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
 
-            {showReceiptModal && currentReceiptItem && (
-              <div
-                style={{
-                  position: "fixed",
-                  inset: 0,
-                  background: "rgba(0,0,0,0.45)",
-                  zIndex: 999999,
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <div
-                  style={{
-                    width: "1050px",
-                    maxWidth: "95%",
-                    background: "#fff",
-                    borderRadius: "8px",
-                    padding: "16px",
-                    boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-                  }}
-                >
-                  <button
-                    onClick={() => setShowReceiptModal(false)}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      fontSize: "18px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    ?
-                  </button>
-
-                  <div style={{ fontWeight: 700, marginTop: "8px", marginBottom: "14px" }}>
-                    Receipt Information
+            {showReceiptModal && currentReceiptItem && showSettleLoad && activeSubMenu === "Settle Load" && (
+              <div className="settle-receipt-overlay">
+                <div className="settle-receipt-modal" role="dialog" aria-modal="true" aria-labelledby="settle-receipt-title">
+                  <div className="settle-receipt-header">
+                    <div>
+                      <h2 id="settle-receipt-title">Receipt Information</h2>
+                      <p>Load No. {settleLoadFormData.loadNo || "—"} · Bill No. {currentReceiptItem.item.billNo || "—"}</p>
+                    </div>
+                    <button type="button" className="settle-receipt-close" aria-label="Close receipt" onClick={() => setShowReceiptModal(false)}>
+                      <X size={16} />
+                    </button>
                   </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(6, 1fr)",
-                      gap: "10px",
-                    }}
-                  >
+                  <div className="settle-receipt-body">
+                    <div className="settle-receipt-section-title">Receipt Details</div>
+                  <div className="settle-receipt-grid">
                     <div className="labeled-input">
                       <label>RECEIPT DATE</label>
                       <input
@@ -65394,15 +65404,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
                   </div>
-
-                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "22px" }}>
-                    <button type="button" className="btn-primary" onClick={handleReceiptSubmit}>
+                  </div>
+                  <div className="settle-receipt-footer">
+                    <span>Enter receipt information</span>
+                    <div className="settle-receipt-footer-actions">
+                    <button type="button" className="settle-receipt-save" onClick={handleReceiptSubmit}>
                       Save Receipt
                     </button>
 
-                    <button type="button" className="btn-danger" onClick={() => setShowReceiptModal(false)}>
+                    <button type="button" className="settle-receipt-cancel" onClick={() => setShowReceiptModal(false)}>
                       Cancel
                     </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -68096,7 +68109,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {activeSubMenu === "Create Load" &&
               openFormFor === "Create Load" && (
                 <div className="premium-create-load-page">
-                  {isSavingCreateLoad && <CreateLoadTruckLoader editing={Boolean(editingCreateLoadId)} />}
                   <form
                     className="premium-create-load-form"
                     onSubmit={(event) => {
@@ -72823,7 +72835,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </div>
               </div>
             )}
-            {activeMenu === "transactions" && activeSubMenu === activeTransactionMenu && (
+            {transactionWorkspaceOpened && (
+              <div hidden={!(activeMenu === "transactions" && activeSubMenu === activeTransactionMenu)}>
               <Transaction
                 salesInvoices={salesListData}
                 salesmen={activeTransactionMenu === "Receipt" ? receiptLookups.salesmen : salesmen}
@@ -72844,6 +72857,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   runtimeGeneralSetup.autoVoucherNo === true
                 }
               />
+              </div>
             )}
 
 

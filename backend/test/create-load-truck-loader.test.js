@@ -10,7 +10,7 @@ assert.ok(start >= 0 && end > start);
 
 function fixture({ editing = false, items = [{ selected: true, billNo: 1, amount: 100 }] } = {}) {
   const state = { loader: [], alerts: [], requests: [] };
-  let resolveRequest, rejectRequest, finishAnimation;
+  let resolveRequest, rejectRequest;
   const pending = new Promise((resolve, reject) => { resolveRequest = resolve; rejectRequest = reject; });
   const noop = () => {};
   const context = {
@@ -20,8 +20,6 @@ function fixture({ editing = false, items = [{ selected: true, billNo: 1, amount
     selectedCreateLoadSummary: {}, createLoadRemarks: "", loggedUserName: "User", editingCreateLoadId: editing ? "id1" : null,
     API_URL: "/api", createLoadCurrentPage: 1, loadListRowsPerPage: 10, loadAppliedFilters: {}, createLoadSearchDebounced: "",
     createLoadSaveInFlight: { current: false }, flushSync: (fn) => fn(), setIsSavingCreateLoad: (v) => state.loader.push(v),
-    performance: { now: () => state.elapsed || 0 },
-    window: { setTimeout: (callback, duration) => { state.delay = duration; finishAnimation = callback; } },
     secureFetch: (url, options) => { state.requests.push({ url, options }); return pending; },
     alert: (message) => state.alerts.push(message), console,
     loadCreateLoads: async () => {}, setCreateLoadCurrentPage: noop, setEditingCreateLoadId: noop, setEditingCreateLoadBills: noop,
@@ -29,37 +27,21 @@ function fixture({ editing = false, items = [{ selected: true, billNo: 1, amount
     setOpenFormFor: noop, setShowCreateLoadList: noop,
   };
   vm.runInNewContext(`${source.slice(start, end)}\nthis.save = saveCreateLoad;`, context);
-  return { state, context, resolveRequest, rejectRequest, finishAnimation: () => finishAnimation() };
+  return { state, context, resolveRequest, rejectRequest };
 }
 
-test("loader follows the save request and prevents duplicate submissions", async () => {
-  const { state, context, resolveRequest, finishAnimation } = fixture();
+test("loader follows the save request and prevents duplicate submissions without an artificial delay", async () => {
+  const { state, context, resolveRequest } = fixture();
   const first = context.save();
   await context.save();
   assert.equal(state.requests.length, 1);
   assert.equal(state.requests[0].options.method, "POST");
   assert.deepEqual(state.loader, [true]);
   resolveRequest({ ok: true, json: async () => ({ success: true }) });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(state.delay, 1200);
-  assert.deepEqual(state.loader, [true]);
-  assert.deepEqual(state.alerts, []);
-  finishAnimation();
   await first;
   assert.deepEqual(state.loader, [true, false]);
   assert.match(state.alerts[0], /created successfully/i);
   assert.equal(context.createLoadSaveInFlight.current, false);
-});
-
-test("a slow successful save does not wait for extra animation time", async () => {
-  const { state, context, resolveRequest } = fixture();
-  const save = context.save();
-  state.elapsed = 2000;
-  resolveRequest({ ok: true, json: async () => ({ success: true }) });
-  await save;
-  assert.equal(state.delay, undefined);
-  assert.deepEqual(state.loader, [true, false]);
-  assert.match(state.alerts[0], /created successfully/i);
 });
 
 test("failed requests hide the loader and permit retry", async () => {

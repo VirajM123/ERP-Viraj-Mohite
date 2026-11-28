@@ -2044,9 +2044,6 @@ router.put(
       if (existingReceipt.status === "REVERSED") {
         return res.status(409).json({ success: false, message: "A reversed receipt cannot be edited." });
       }
-      if (existingReceipt.receiptSource === "SETTLE_LOAD") {
-        return res.status(409).json({ success: false, message: "This receipt belongs to a load settlement and cannot be edited separately." });
-      }
 
       const body =
         req.body || {};
@@ -2344,6 +2341,48 @@ drawerBankName:
         }
 
         const before = currentReceipt.toObject();
+        const isSettlementReceipt =
+          currentReceipt.receiptSource === "SETTLE_LOAD";
+
+        /*
+         * A settlement receipt may have its payment details corrected from
+         * the Receipt screen (for example, Cash entered instead of Cheque).
+         * Its allocation and document identity remain owned by Settle Load,
+         * so those cannot be changed here.
+         */
+        if (isSettlementReceipt) {
+          const allocationKey = (bill = {}) => [
+            String(bill.openingTransactionId || "").trim(),
+            String(bill.trnSeries || "").trim(),
+            String(bill.trnNo || "").trim(),
+            Number(bill.nowAdjust || 0).toFixed(2),
+            Number(bill.discAmt || 0).toFixed(2),
+          ].join("|");
+          const originalAllocations = (currentReceipt.receiptBills || [])
+            .map(allocationKey)
+            .sort();
+          const submittedAllocations = adjustedBills
+            .map(allocationKey)
+            .sort();
+          const allocationsMatch =
+            originalAllocations.length === submittedAllocations.length &&
+            originalAllocations.every((value, index) => value === submittedAllocations[index]);
+          const partyMatches =
+            String(body.partyId || "").trim() === String(currentReceipt.partyId || "").trim() &&
+            String(body.partyName || "").trim() === String(currentReceipt.partyName || "").trim();
+          const numberMatches =
+            receiptNumber === Number(currentReceipt.rno || 0);
+          const amountMatches =
+            Math.abs(receiptAmount - Number(currentReceipt.receiptAmount || 0)) <= 0.01;
+
+          if (!allocationsMatch || !partyMatches || !numberMatches || !amountMatches) {
+            throw Object.assign(
+              new Error("A receipt created by Settle Load can only have its payment details corrected. Change its bill allocation, party, amount, or receipt number from Settle Load."),
+              { statusCode: 409 }
+            );
+          }
+        }
+
         const sales = mongoose.connection.collection("T_Sal_Header");
 
         // First release every allocation recorded by the original receipt.
@@ -2506,6 +2545,62 @@ drawerBankName:
           editUser: req.auth.userId || updateData.editUser || "",
         });
         updatedReceipt = await currentReceipt.save({ session });
+
+        if (isSettlementReceipt) {
+          const settlementBill = (currentReceipt.receiptBills || []).find(
+            (bill) => !bill.openingTransactionId
+          );
+          const loadSeries = String(currentReceipt.loadSeries || "").trim();
+          const loadNo = String(currentReceipt.loadNo || "").trim();
+
+          if (!settlementBill || !loadSeries || !loadNo) {
+            throw Object.assign(
+              new Error("The linked Settle Load details are missing for this receipt."),
+              { statusCode: 409 }
+            );
+          }
+
+          const receiptIsCash = /^cash$/i.test(bankCash);
+          const settlementUpdate = await mongoose.connection
+            .collection("T_SettleLoad")
+            .updateOne(
+              {
+                distributorId,
+                firmId,
+                loadSeries,
+                loadNo,
+                isActive: true,
+                bills: {
+                  $elemMatch: {
+                    billSeries: String(settlementBill.trnSeries || "").trim(),
+                    billNo: String(settlementBill.trnNo || "").trim(),
+                  },
+                },
+              },
+              {
+                $set: {
+                  "bills.$.receiptDate": currentReceipt.receiptDate || "",
+                  "bills.$.receiptMode": receiptIsCash ? "Cash" : "Cheque",
+                  "bills.$.bankCode": receiptIsCash ? "CASH" : bankCash,
+                  "bills.$.bankCash": bankCash,
+                  "bills.$.bankName": bankCash,
+                  "bills.$.drawerBank": currentReceipt.drawerBankName || "",
+                  "bills.$.chequeNo": currentReceipt.chequeNo || "",
+                  "bills.$.chequeDate": currentReceipt.chequeDate || "",
+                  "bills.$.micr": currentReceipt.micr || "",
+                  "bills.$.receiptNarration": currentReceipt.narration || "",
+                },
+              },
+              { session }
+            );
+
+          if (settlementUpdate.matchedCount !== 1) {
+            throw Object.assign(
+              new Error("The active Settle Load linked to this receipt was not found."),
+              { statusCode: 409 }
+            );
+          }
+        }
 
         await postBalancedJournal(
           {

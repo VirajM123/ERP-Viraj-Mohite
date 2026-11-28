@@ -74,6 +74,16 @@ const getLoadingType = (input, init) => {
   return "workspace";
 };
 
+const getSaveLoadingContent = (path) => {
+  if (path.includes("/create-load")) return { title: "Saving Load...", message: "Please wait while the load is saved." };
+  if (path.includes("/settle-load")) return { title: "Saving Settle Load...", message: "Please wait while the settlement is saved." };
+  if (path.includes("/sales") || path.includes("/invoice")) return { title: "Saving Invoice...", message: "Please wait while the invoice is saved." };
+  if (path.includes("/purchase")) return { title: "Saving Purchase...", message: "Please wait while the purchase is saved." };
+  if (path.includes("/receipt")) return { title: "Saving Receipt...", message: "Please wait while the receipt is saved." };
+  if (path.includes("/payment")) return { title: "Saving Payment...", message: "Please wait while the payment is saved." };
+  return { title: "Saving Entry...", message: "Please wait while your changes are saved." };
+};
+
 export const notifyLoadingStart = (requestId, type) => {
   window.dispatchEvent(new CustomEvent("erp:loading-start", { detail: { requestId, type } }));
 };
@@ -166,8 +176,7 @@ export const authenticatedFetch = (input, init = {}) => {
   const isSave = trusted && ["POST", "PUT", "PATCH"].includes(method) && !/\/(login|logout|session|report|search|lookup|preflight)(\/|$)/.test(path);
   const finishVisual = isSave
     ? startVisualLoading({
-      title: path.includes("/sales") ? "Saving sales invoice..." : "Saving changes...",
-      message: "Please wait while your changes are saved.",
+      ...getSaveLoadingContent(path),
       variant: "saving",
     })
     : null;

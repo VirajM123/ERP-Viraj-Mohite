@@ -13,14 +13,15 @@ export function getLoadingSnapshot() { return snapshot; }
 export function startVisualLoading(content) {
   const id = Symbol();
   const isReport = content.variant === "report";
+  const isSave = content.variant === "saving";
   let shownAt;
   const show = () => {
     shownAt = Date.now();
     tasks.set(id, { content });
     publish();
   };
-  const timer = isReport ? null : window.setTimeout(show, REVEAL_DELAY_MS);
-  if (isReport) show();
+  const timer = isReport || isSave ? null : window.setTimeout(show, REVEAL_DELAY_MS);
+  if (isReport || isSave) show();
   let finished = false;
   return () => {
     if (finished) return;

@@ -1,0 +1,1 @@
+Method,Path,Module,Severity,Affected workflow,Baseline p50,Baseline p95,Baseline p99,Load scenario,Samples,Error rate,Source,Root cause status,Root cause / verification,Proposed change,Target,Effort,Risk,Safeguards,Verification,Rollout,Rollback,Priority rationale

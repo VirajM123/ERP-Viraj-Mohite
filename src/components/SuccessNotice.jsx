@@ -1,10 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import "./SuccessNotice.css";
-
-export function showSuccessNotice(message) {
-  window.dispatchEvent(new CustomEvent("erp:success-notice", { detail: { message } }));
-}
+export { showSuccessNotice } from "./successFeedback";
 
 export default function SuccessNotice() {
   const [notice, setNotice] = useState(null);

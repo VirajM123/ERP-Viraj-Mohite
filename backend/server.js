@@ -21461,7 +21461,10 @@ app.post(
               .session(session)
               .lean();
 
-          receiptNumber = await nextDocumentNumber({ distributorId, firmId, documentType: "RECEIPT", series: item.billSeries, documentDate: item.receiptDate || settlementDate, session, minimumValue: Number(lastReceipt?.rno || 0) });
+          // Receipt numbers are unique within their receipt series, not the
+          // sales-bill series.  Using the bill series here could generate the
+          // same RC number for two different bill series in one settlement.
+          receiptNumber = await nextDocumentNumber({ distributorId, firmId, documentType: "RECEIPT", series: item.receiptSeries || "RC", documentDate: item.receiptDate || settlementDate, session, minimumValue: Number(lastReceipt?.rno || 0) });
         }
         item.receiptNo = String(receiptNumber);
 
