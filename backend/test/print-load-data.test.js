@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildPrintLoadPartyRows, buildPrintLoadProductRows } from "../printLoadData.js";
+import { buildPrintLoadPartyRows, buildPrintLoadProductRows, calculateLoadWeight } from "../printLoadData.js";
 
 test("product load shows a 20-piece pack as 20 units, 20 quantity and one case", () => {
   const rows = buildPrintLoadProductRows([{ items: [{ productCode: "P", productName: "Salt", qty: 20, units: "PCS", boxPack: 20, mrp: 34, netAmount: 100 }] }]);
@@ -26,6 +26,17 @@ test("product master supplies missing pack and unknown BOX quantities are not fa
   const unknown = buildPrintLoadProductRows(bills)[0];
   assert.equal(unknown.totalQty, null);
   assert.equal(unknown.cases, null);
+});
+
+test("load weight uses master kg per piece, converts boxes, and includes free pieces when requested", () => {
+  const products = [{ productCode: "P", weight: 1, boxPack: 18 }, { productCode: "S", weight: 0.07 }];
+  const bills = [{ items: [{ productCode: "P", qty: 180, units: "PCS" }, { productCode: "S", qty: 1, free: 2, units: "PCS" }] }];
+  assert.equal(buildPrintLoadProductRows(bills, products)[0].weight, 180);
+  assert.equal(calculateLoadWeight(bills, products), 180.21);
+  assert.equal(calculateLoadWeight(bills, products, false), 180.07);
+  assert.equal(calculateLoadWeight([{ items: [{ productCode: "P", qty: 10, units: "BOX" }] }], products), 180);
+  assert.equal(calculateLoadWeight([{ items: [{ productCode: "P", qty: 1, units: "PCS" }] }], []), null);
+  assert.equal(calculateLoadWeight([{ items: [] }], products), null);
 });
 
 test("party load uses bill, area, salesman and receipt values without double-counting settlement", () => {

@@ -1,0 +1,31 @@
+PRODUCT MASTER - WEIGHT VALUES
+
+Enter the suggested weight in kilograms per individual stock unit.
+The ERP multiplies this weight by stock quantity. If your stock unit is an
+entire case or bundle instead of one individual pack, confirm the correct
+weight before entry. These are net contents, excluding packaging.
+
+Product name                                      | Weight (kg) | Notes
+--------------------------------------------------|-------------|------------------------------------------------------------
+I-Shakti (25x1kg)                                 | 1           | Per 1 kg pack.
+IShakti Soda 12.6 Kg (70 Gm X 9/20) Rs10         | 0.07        | Per 70 g sachet. Confirm whether stock counts sachets or packs of 9.
+SODA 1KG (25)                                     | 1           | Per 1 kg pack.
+TATA HIMALAYAN ROCK SALT 18x1KG Bag               | 1           | Per 1 kg pack, not the outer bag.
+TATA LITE FG 1KG (25 PC)                          | 1           | Per 1 kg pack.
+TATA SALT BLACK SALT 144X70G SACHET               | 0.07        | Per 70 g sachet.
+TATA SALT CRYSTAL 25 X 1 KG. (FG) NEW MR          | 1           | Per 1 kg pack.
+TATA SALT IMMUNO 1 x 25 KG                        | 25          | CONFIRM: assumes one 25 kg unit. If 25 packs of 1 kg, enter 1.
+TATA SALT PACKED 25 X 2 KG (MRP 55)               | 2           | Per 2 kg pack.
+TATA SALT PLUS 1 x 25 KG                          | 25          | CONFIRM: assumes one 25 kg unit. If 25 packs of 1 kg, enter 1.
+TATA SALT POWDER 30 X 1 KG (MRP 34)               | 1           | Per 1 kg pack.
+TATA SALT ROCK 1KG                                | 1           | Per 1 kg pack.
+TATA SALT ROCK 500 GM                             | 0.5         | Per 500 g pack.
+TATA SALT ROCK SALT 144X80 G SACHET               | 0.08        | Per 80 g sachet. Name appears twice in the list.
+TATA SALT ROCK SALT 144X80 G SACHET               | 0.08        | DUPLICATE: confirm whether this has a separate product code.
+TATA SALT SENDHA 25X1                             | 1           | CONFIRM: assumes each pack is 1 kg; the name does not state a unit.
+TATA SALT Sendha+ 12X1 KG                         | 1           | Per 1 kg pack.
+TSL 25X1kg+5X80g Rock Salt free                   | 1           | CONFIRM: per main 1 kg pack, excluding free sachets. Full bundle: 25.4 kg.
+Tata I-Shakti Cooking Soda 192X60g                | 0.06        | Per 60 g sachet.
+Tata I-Shakti Soda 1kgX(25+1)                     | 1           | CONFIRM: per individual 1 kg pack. Full 26-pack bundle: 26 kg.
+
+This is a reference sheet for manual entry, not an ERP import file.

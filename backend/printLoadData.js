@@ -22,7 +22,7 @@ export function buildPrintLoadProductRows(bills, products = [], includeFree = tr
     if (!rows.has(key)) rows.set(key, {
       productCode: code, prodName: name, mrp, hsnCode: hsn, unitQty: pack, boxPack: pack,
       shortCode: pick(item, ["shortCode", "ShortCode"], master.shortCode || ""),
-      weight: number(pick(item, ["weight", "Weight"], master.weight)), qty: 0, freeQty: 0, totalQty: 0, cases: 0, netAmt: 0, discount: 0,
+      unitWeight: number(pick(master, ["weight", "Weight"], pick(item, ["weight", "Weight"], 0))), qty: 0, freeQty: 0, totalQty: 0, cases: 0, netAmt: 0, discount: 0,
     });
     const row = rows.get(key);
     const billed = number(pick(item, ["qty", "Qty", "quantity"], 0));
@@ -42,9 +42,16 @@ export function buildPrintLoadProductRows(bills, products = [], includeFree = tr
     boxPack: row.boxPack > 0 ? row.boxPack : null,
     qty: row.unknownQty ? null : row.qty,
     totalQty: row.unknownQty ? null : row.totalQty,
+    weight: row.unknownQty || row.unitWeight <= 0 ? null : Number((row.totalQty * row.unitWeight).toFixed(3)),
     cases: !row.unknownQty && row.unitQty > 0 ? Math.floor((row.totalQty + 1e-9) / row.unitQty) : null,
     sr: index + 1,
   }));
+}
+
+export function calculateLoadWeight(bills, products = [], includeFree = true) {
+  const rows = buildPrintLoadProductRows(bills, products, includeFree);
+  if (bills.some((bill) => !Array.isArray(bill.items) || bill.items.length === 0) || rows.some((row) => row.weight === null)) return null;
+  return Number(rows.reduce((sum, row) => sum + row.weight, 0).toFixed(3));
 }
 
 function receiptKind(receipt, settlement) {

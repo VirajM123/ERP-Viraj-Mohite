@@ -11760,7 +11760,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     const { index, item } = currentReceiptItem;
 
-    if (isSettleLoadItemFinalized(item)) {
+    if (isSettleLoadItemFinalized(item, { allowBillEdit: true })) {
       alert(
         "This bill already has a settlement action. A receipt cannot be taken again."
       );
@@ -12587,10 +12587,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   /* Settlement decisions affect receipt/allocation records and are immutable
      from this screen once one has been made for a bill. */
-  const isSettleLoadItemFinalized = (item = {}) => {
+  const isSettleLoadItemFinalized = (item = {}, { allowBillEdit = false } = {}) => {
     const status = String(item.status || "").trim().toLowerCase();
 
     return (
+      (item.billAmountUpdated === true && !allowBillEdit) ||
       item.cancel === "Y" ||
       item.pending === "Y" ||
       item.adjust === "Y" ||
@@ -14176,6 +14177,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   });
   const [showCreateLoadSalesmanBox, setShowCreateLoadSalesmanBox] = useState(false);
   const [createLoadItems, setCreateLoadItems] = useState([]);
+  const createLoadBillsRequestRef = useRef(0);
   const [showCreateLoadAreaBox, setShowCreateLoadAreaBox] =
     useState(false);
   useEffect(() => {
@@ -26061,10 +26063,10 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
                     ? "Y"
                     : "N",
 
-                pending:
-                  updatedPendingAmount > 0
-                    ? "Y"
-                    : "N",
+                // An outstanding balance is not a Pending action. The
+                // invoice edit locks other actions via billAmountUpdated,
+                // while Receipt remains available for the balance.
+                pending: "N",
 
                 cancel: "N",
 
@@ -40127,6 +40129,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         bill.billAmount ??
         0
       ),
+      loadWeight: bill.loadWeight ?? null,
     };
 
     mappedBill.selected = selectedBillKeys.has(
@@ -40201,6 +40204,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       formData = null,
       options = {}
     ) => {
+      const requestId = ++createLoadBillsRequestRef.current;
       const currentForm =
         formData || createLoadFormData;
 
@@ -40319,6 +40323,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
         const result = await response.json();
 
+        if (requestId !== createLoadBillsRequestRef.current) return [];
+
         if (!response.ok || !result.success) {
           throw new Error(
             result.message ||
@@ -40330,12 +40336,13 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         * Backend should already include current load bills.
         * The merge below is an additional frontend safeguard.
         */
-        const combinedBills = [
-          ...(result.bills || []),
-          ...(Array.isArray(savedBills)
-            ? savedBills
-            : []),
-        ];
+        const savedKeys = new Set((Array.isArray(savedBills) ? savedBills : []).map(getCreateLoadBillKey));
+        const combinedBills = editLoadId
+          ? [
+              ...(result.bills || []).filter((bill) => savedKeys.has(getCreateLoadBillKey(bill))),
+              ...(Array.isArray(savedBills) ? savedBills : []),
+            ]
+          : (result.bills || []);
 
         const uniqueBillsMap = new Map();
 
@@ -40376,6 +40383,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
         return loadedBills;
       } catch (error) {
+        if (requestId !== createLoadBillsRequestRef.current) return [];
         console.error(
           "Create Load bill loading error:",
           error
@@ -40473,8 +40481,10 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       );
     }, 300);
 
-    return () =>
+    return () => {
       window.clearTimeout(timer);
+      createLoadBillsRequestRef.current++;
+    };
   }, [
     openFormFor,
     createLoadFormData.company,
@@ -40807,6 +40817,9 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     return {
       totalBills: selectedBills.length,
       totalAmount: Number(totalAmount.toFixed(2)),
+      totalWeight: selectedBills.some((bill) => bill.loadWeight == null)
+        ? null
+        : Number(selectedBills.reduce((sum, bill) => sum + Number(bill.loadWeight), 0).toFixed(3)),
       totalParties: uniqueParties.size,
 
       totalSalesmen:
@@ -42880,7 +42893,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       return "";
     }
 
-    if (["unitQty", "qty", "cases", "totalQty", "boxPack"].includes(columnKey) && row[columnKey] === null) return "-";
+    if (["unitQty", "qty", "cases", "totalQty", "boxPack", "weight"].includes(columnKey) && row[columnKey] === null) return "-";
     const value = getPrintLoadValue(
       row,
       columnKey,
@@ -42903,7 +42916,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
     }
 
-    return formatPrintLoadNumber(value, 2);
+    return formatPrintLoadNumber(value, columnKey === "weight" ? 3 : 2);
   };
 
   const chunkPrintLoadRows = (
@@ -64881,7 +64894,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="settle-row-button settle-receipt-button"
-                                      disabled={settlementActionFinalized}
+                                      disabled={isSettleLoadItemFinalized(item, { allowBillEdit: true })}
                                       onClick={async () => {
                                         setSelectedSettleBillIndex(index);
 
@@ -69102,6 +69115,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               </strong>
                             </div>
 
+                            <div>
+                              <span>Total Product Weight</span>
+                              <strong>{selectedCreateLoadSummary.totalWeight == null
+                                ? "Unavailable — check product weights"
+                                : `${selectedCreateLoadSummary.totalWeight.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`}</strong>
+                            </div>
+
                             <div className="premium-load-side-divider" />
 
                             <div className="premium-load-total-amount-row">
@@ -69865,6 +69885,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                           <div>
                                             <b>Area Name :</b>{" "}
                                             {printLoadAreaName || "ALL"}
+                                          </div>
+
+                                          <div>
+                                            <b>Total Product Weight :</b>{" "}
+                                            {printLoadHeader.totalWeight == null
+                                              ? "Unavailable — check product weights and bill details"
+                                              : `${formatPrintLoadNumber(printLoadHeader.totalWeight, 3)} kg`}
                                           </div>
 
                                           {printLoadFormData.reportLevel === "party_wise" && printLoadItems.some((row) => Number(row.unclassifiedPayment) > 0) && (

@@ -11,7 +11,8 @@ import generalSetupRoutes from "./generalSetup.js";
 import companyWiseSeriesRoutes from "./companyWiseSeries.js";
 import createBatchLockRouter from "./batchLock.js";
 import printAccountDetailsRoutes from "./printAccountDetails.js";
-import { buildPrintLoadProductRows, buildPrintLoadPartyRows } from "./printLoadData.js";
+import { buildPrintLoadProductRows, buildPrintLoadPartyRows, calculateLoadWeight } from "./printLoadData.js";
+import { excludeBillsInOtherLoads } from "./loadBillAvailability.js";
 import { buildLoadReports } from "./loadReports.js";
 import createSecuritySetupRouter from "./securitySetup.js";
 import { authorizeAny } from "./authorizeAny.js";
@@ -17103,24 +17104,10 @@ app.get(
       * unloaded bills plus bills assigned to
       * the load currently being edited.
       */
-      const loadAvailabilityConditions = [
-        {
-          IsLoaded: {
-            $ne: true,
-          },
-        },
-        {
-          LoadNo: null,
-        },
-        {
-          LoadNo: {
-            $exists: false,
-          },
-        },
-        {
-          LoadNo: 0,
-        },
-      ];
+      const loadAvailabilityConditions = [{
+        IsLoaded: { $ne: true },
+        $or: [{ LoadNo: null }, { LoadNo: { $exists: false } }, { LoadNo: 0 }],
+      }];
 
       if (editingLoad) {
         loadAvailabilityConditions.push({
@@ -17183,7 +17170,7 @@ app.get(
         });
       }
 
-      const bills =
+      const candidateBills =
         await SalesHeader.find(filter)
           .sort({
             BillDate: 1,
@@ -17191,10 +17178,20 @@ app.get(
           })
           .lean();
 
+      const billNumbers = [...new Set(candidateBills.flatMap((bill) => [bill.BillNo, String(bill.BillNo)]).filter((value) => value !== undefined && value !== null))];
+      const activeLoads = billNumbers.length ? await LoadHeader.find({
+        DistributorId: distributorId, FirmId: firmId, IsCancelled: { $ne: true },
+        "Bills.BillNo": { $in: billNumbers },
+      }).select("Bills").lean() : [];
+      const bills = excludeBillsInOtherLoads(candidateBills, activeLoads, editingLoad?._id);
+      const codes = [...new Set(bills.flatMap((bill) => (bill.items || []).map((item) => String(item.productCode || item.ProdCode || item.code || "").trim())).filter(Boolean))];
+      const products = codes.length ? await Product.find({ distributorId, firmId, productCode: { $in: codes } }).select("productCode boxPack weight").lean() : [];
+      const weightedBills = bills.map((bill) => ({ ...bill, loadWeight: calculateLoadWeight([bill], products) }));
+
       res.json({
         success: true,
-        count: bills.length,
-        bills,
+        count: weightedBills.length,
+        bills: weightedBills,
       });
     } catch (error) {
       console.error(
@@ -20751,6 +20748,11 @@ app.get("/api/print-load", ensureConnection, securityRouter.authorizeRequest("SA
       return { BillSeries: String(b.BillSeries ?? b.Series ?? b.billSeries ?? "").trim(), BillNo: number };
     }).filter(Boolean);
     const salesBills = billConditions.length ? await SalesHeader.find({ distributorId, firmId, isActive: true, $or: billConditions }).lean() : [];
+    const codes = [...new Set(salesBills.flatMap((bill) => (bill.items || []).map((item) => String(item.productCode || item.ProdCode || item.code || "").trim())).filter(Boolean))];
+    const products = codes.length ? await Product.find({ distributorId, firmId, productCode: { $in: codes } }).select("productCode productName boxPack hsn shortCode weight").lean() : [];
+    const totalWeight = salesBills.length === loadBills.length
+      ? calculateLoadWeight(salesBills, products, withFreeQty !== "no")
+      : null;
     let rows;
     if (reportLevel === "party_wise") {
       const receiptConditions = loadBills.map((b) => ({
@@ -20763,8 +20765,6 @@ app.get("/api/print-load", ensureConnection, securityRouter.authorizeRequest("SA
       ]);
       rows = buildPrintLoadPartyRows(loadBills, salesBills, receipts, settlement?.bills || []);
     } else {
-      const codes = [...new Set(salesBills.flatMap((bill) => (bill.items || []).map((item) => String(item.productCode || item.ProdCode || item.code || "").trim())).filter(Boolean))];
-      const products = codes.length ? await Product.find({ distributorId, firmId, productCode: { $in: codes } }).select("productCode productName boxPack hsn shortCode weight").lean() : [];
       rows = buildPrintLoadProductRows(salesBills, products, withFreeQty !== "no");
     }
 
@@ -20780,6 +20780,7 @@ app.get("/api/print-load", ensureConnection, securityRouter.authorizeRequest("SA
         totalBills: load.TotalBills || loadBills.length,
         totalParty: new Set(loadBills.map((b) => b.PartyCode || b.partyCode)).size,
         totalAmount: Number(load.TotalAmount || 0),
+        totalWeight,
         areaName: loadBills[0]?.AreaName || "",
         userName: load.CreatedBy || "ADMIN",
       },
