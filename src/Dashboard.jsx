@@ -40465,7 +40465,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       ).trim() !== "";
 
     if (!allFieldsSelected) {
-      setCreateLoadItems([]);
+      if (!editingCreateLoadId) setCreateLoadItems([]);
       return;
     }
 
@@ -58056,10 +58056,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
     const handleEditLoad = async (item) => {
       try {
-        const original = item.originalItem || item;
+        const listItem = item.originalItem || item;
 
         const loadId =
-          original._id ||
+          listItem._id ||
           item._id ||
           item.id ||
           "";
@@ -58068,6 +58068,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           alert("Load ID not found.");
           return;
         }
+
+        const response = await secureFetch(
+          `${API_URL}/create-load/${encodeURIComponent(loadId)}`
+        );
+        const result = await response.json();
+        if (!response.ok || !result.success || !result.load) {
+          throw new Error(result.message || "Unable to load the saved bills.");
+        }
+        const original = result.load;
 
         const savedBills = Array.isArray(original.Bills)
           ? original.Bills
@@ -58268,14 +58277,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             "",
         };
 
+        const savedKeys = new Set(savedBills.map(getCreateLoadBillKey));
         const selectedBills = savedBills.map((bill, index) => ({
-          ...bill,
-          id:
-            bill.id ||
-            bill._id ||
-            bill.salesBillId ||
-            `${bill.BillSeries || bill.billSeries || ""}-${bill.BillNo || bill.billNo || index
-            }`,
+          ...mapCreateLoadBill(bill, index, savedKeys),
           selected: true,
         }));
 
@@ -58283,6 +58287,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         setEditingCreateLoadBills(selectedBills);
         setCreateLoadFormData(editFormData);
         setCreateLoadItems(selectedBills);
+        setSelectedCreateLoadAreas([]);
+        setCreateLoadBillSearch("");
 
         setShowCreateLoadList(false);
         setShowSettleLoad(false);
@@ -58294,7 +58300,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         setShowDashboard(false);
       } catch (error) {
         console.error("Edit Create Load error:", error);
-        alert("Unable to open Create Load for editing.");
+        alert(error.message || "Unable to open Create Load for editing.");
       }
     };
 

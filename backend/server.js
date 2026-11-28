@@ -18653,6 +18653,30 @@ app.get(
     }
   }
 );
+// The paginated list omits bill details; fetch only the selected load when
+// opening its view or edit form.
+app.get(
+  "/api/create-load/:id",
+  ensureConnection,
+  authorizeReadFor(["SALES", "CREATE_LOAD", "view"], ["SALES", "CREATE_LOAD", "edit"]),
+  async (req, res) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ success: false, message: "Invalid Create Load ID" });
+      }
+      const load = await LoadHeader.findOne({
+        _id: req.params.id,
+        DistributorId: req.auth.distributorId,
+        FirmId: req.auth.firmId,
+      }).lean();
+      if (!load) return res.status(404).json({ success: false, message: "Create Load not found" });
+      return res.json({ success: true, load });
+    } catch (error) {
+      console.error("Create Load detail error:", error);
+      return res.status(500).json({ success: false, message: "Failed to load Create Load details" });
+    }
+  }
+);
 const buildCreateLoadBillCondition = (bill) => {
   const salesBillId = String(
     bill.SalesBillId ||
