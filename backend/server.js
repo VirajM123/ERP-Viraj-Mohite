@@ -7833,6 +7833,42 @@ app.post(
     });
   }
 });
+app.get("/api/sales/last-product-rate", ensureConnection, authorizeReadFor(
+  ["SALES", "SALES_BILLING", "view"],
+  ["SALES", "SALES_BILLING", "add"],
+  ["SALES", "SALES_BILLING", "edit"],
+  ["SALES", "SETTLE_LOAD", "edit"]
+), async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.auth;
+    const partyCode = String(req.query.partyCode || "").trim();
+    const productCode = String(req.query.productCode || "").trim();
+    const billDate = String(req.query.billDate || "").trim();
+    const excludeBillId = String(req.query.excludeBillId || "").trim();
+    if (!partyCode || !productCode || (billDate && !/^\d{4}-\d{2}-\d{2}$/.test(billDate)) ||
+      (excludeBillId && !mongoose.Types.ObjectId.isValid(excludeBillId))) {
+      return res.status(400).json({ success: false, message: "Valid customer, product and bill date are required." });
+    }
+    const filter = {
+      distributorId, firmId, PartyCode: partyCode,
+      isActive: { $ne: false }, IsBillCancelled: { $ne: true }, BillStatus: { $not: /^cancelled$/i },
+      $or: ["productCode", "productId", "ProdCode", "code"].map((field) => ({ [`items.${field}`]: productCode })),
+    };
+    if (billDate) filter.BillDate = { $lte: billDate };
+    if (excludeBillId) filter._id = { $ne: new mongoose.Types.ObjectId(excludeBillId) };
+    const bill = await SalesHeader.findOne(filter).select("BillDate BillSeries BillNo items")
+      .sort({ BillDate: -1, createdAt: -1, _id: -1 }).lean();
+    const item = [...(bill?.items || [])].reverse().find((row) =>
+      [row.productCode, row.productId, row.ProdCode, row.code].some((value) => String(value ?? "").trim() === productCode)
+    );
+    const savedRate = item?.rate ?? item?.salesRate ?? item?.srate ?? item?.SRate;
+    const rate = savedRate !== "" && savedRate != null && Number.isFinite(Number(savedRate)) ? Number(savedRate) : null;
+    return res.json({ success: true, rate });
+  } catch (error) {
+    console.error("Last sales rate lookup error:", error);
+    return res.status(500).json({ success: false, message: "Unable to load last sales rate." });
+  }
+});
 app.get("/api/sales/bill", ensureConnection, authorizeReadFor(
   ["SALES", "SALES_BILLING", "view"],
   ["SALES", "SETTLE_LOAD", "add"],
@@ -18653,6 +18689,30 @@ app.get(
     }
   }
 );
+// Register the fixed next-number path before the load-ID detail route.
+app.get("/api/create-load/next-no", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    const loadSeries = String(req.query.loadSeries || "").trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({ success: false, message: "distributorId and firmId are required" });
+    }
+
+    const filter = {
+      DistributorId: distributorId,
+      FirmId: firmId,
+      IsCancelled: { $ne: true },
+      LoadSeries: loadSeries,
+    };
+    const lastLoad = await LoadHeader.findOne(filter).select("LoadNo").sort({ LoadNo: -1 }).lean();
+    return res.json({ success: true, nextLoadNo: Number(lastLoad?.LoadNo || 0) + 1 });
+  } catch (error) {
+    console.error("Next Load No error:", error);
+    return res.status(500).json({ success: false, message: "Failed to get next load no", error: error.message });
+  }
+});
 // The paginated list omits bill details; fetch only the selected load when
 // opening its view or edit form.
 app.get(
@@ -23168,45 +23228,6 @@ app.get("/api/receipt/bill-balance", ensureConnection, authorizeReadFor(
   }
 });
 
-app.get("/api/create-load/next-no", ensureConnection, async (req, res) => {
-  try {
-    const distributorId = String(req.query.distributorId || "").trim();
-    const firmId = String(req.query.firmId || "").trim();
-    const loadSeries = String(req.query.loadSeries || "").trim();
-
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
-        success: false,
-        message: "distributorId and firmId are required",
-      });
-    }
-
-    const filter = {
-      DistributorId: distributorId,
-      FirmId: firmId,
-      IsCancelled: { $ne: true },
-      LoadSeries: loadSeries,
-    };
-
-    const lastLoad = await LoadHeader.findOne(filter)
-      .sort({ LoadNo: -1 })
-      .lean();
-
-    const nextLoadNo = Number(lastLoad?.LoadNo || 0) + 1;
-
-    res.json({
-      success: true,
-      nextLoadNo,
-    });
-  } catch (error) {
-    console.error("Next Load No error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get next load no",
-      error: error.message,
-    });
-  }
-});
 const cancelSalesBill = async ({ req, session, bill, reason }) => {
   const distributorId = req.auth.distributorId;
   const firmId = req.auth.firmId;

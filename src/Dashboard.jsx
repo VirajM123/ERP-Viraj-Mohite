@@ -9295,6 +9295,34 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ? invoiceItems[selectedSalesDetailRow]
       : null;
 
+  const [lastSalesRate, setLastSalesRate] = useState({ status: "idle", rate: null });
+  const lastRateProductCode = String(
+    selectedSalesDetailItem?.productCode || selectedSalesDetailItem?.productId ||
+    String(selectedSalesDetailItem?.product || "").split(" - ")[0] || ""
+  ).trim();
+  useEffect(() => {
+    const partyCode = String(invoiceFormData.party || "").trim();
+    if (openFormFor !== "Billing" || !partyCode || !lastRateProductCode) {
+      setLastSalesRate({ status: "idle", rate: null });
+      return undefined;
+    }
+    const controller = new AbortController();
+    const params = new URLSearchParams({ partyCode, productCode: lastRateProductCode });
+    if (invoiceFormData.billDate) params.set("billDate", invoiceFormData.billDate);
+    if (editingInvoiceId) params.set("excludeBillId", editingInvoiceId);
+    setLastSalesRate({ status: "loading", rate: null });
+    secureFetch(`${API_URL}/sales/last-product-rate?${params}`, { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || "Last sales rate unavailable");
+        if (!controller.signal.aborted) setLastSalesRate({ status: "ready", rate: result.rate });
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError" && !controller.signal.aborted) setLastSalesRate({ status: "error", rate: null });
+      });
+    return () => controller.abort();
+  }, [openFormFor, invoiceFormData.party, invoiceFormData.billDate, lastRateProductCode, editingInvoiceId]);
+
   const getSalesDetailBatch = (item) =>
     item?.batchNo ||
     item?.selectedBatch?.batchNo ||
@@ -10773,7 +10801,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   }, [showSettleLoad, activeSubMenu]);
 
   const changeSettleBillTypeByF4 = async () => {
-    if (!showSettleLoad || settleLoadItems.length === 0) {
+    if (isFormReadOnly || !showSettleLoad || settleLoadItems.length === 0) {
       return;
     }
 
@@ -11022,7 +11050,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     invoiceFormData.billType,
     invoiceFormData.BillSeries,
     invoiceFormData.billNo,
-    openFormFor
+    openFormFor,
+    isFormReadOnly
   ]);
   // ================= COMMON REGEX VALIDATION =================
   const numericFields = [
@@ -11537,6 +11566,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
 
   const updateSettleLoadItem = (index, field, value) => {
+    if (isFormReadOnly) return;
     const currentItem = settleLoadItems[index];
 
     if (!currentItem) return;
@@ -11756,7 +11786,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       event.stopPropagation();
     }
 
-    if (!currentReceiptItem) return;
+    if (isFormReadOnly || !currentReceiptItem) return;
 
     const { index, item } = currentReceiptItem;
 
@@ -11930,6 +11960,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setCurrentReceiptItem(null);
   };
   const handleSettleAdjustEdit = async (item) => {
+    if (isFormReadOnly) return;
     try {
       const { distributorId, firmId } = getFirmSession();
 
@@ -12499,6 +12530,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     };
   };
   const handleSettleLoadInputChange = (e) => {
+    if (isFormReadOnly) return;
     const { name, value } = e.target;
 
     const cleanValue =
@@ -12600,7 +12632,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     );
   };
   const saveSettleLoad = async () => {
-    if (settleLoadSaveInFlight.current) return;
+    if (isFormReadOnly || settleLoadSaveInFlight.current) return;
 
     try {
       const {
@@ -14178,6 +14210,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [showCreateLoadSalesmanBox, setShowCreateLoadSalesmanBox] = useState(false);
   const [createLoadItems, setCreateLoadItems] = useState([]);
   const createLoadBillsRequestRef = useRef(0);
+  const createLoadNumberRequestRef = useRef(0);
   const [showCreateLoadAreaBox, setShowCreateLoadAreaBox] =
     useState(false);
   useEffect(() => {
@@ -40181,23 +40214,6 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       return String(maxNo + 1);
     }
   };
-  useEffect(() => {
-    if (openFormFor !== "Create Load") return;
-
-    const setNextNo = async () => {
-      const nextNo = await getNextCreateLoadNo(createLoadFormData.loadSeries);
-
-      setCreateLoadFormData((prev) => ({
-        ...prev,
-        loadNo: String(nextNo),
-      }));
-    };
-
-    if (!createLoadFormData.loadNo || createLoadFormData.loadNo === "[object Promise]") {
-      setNextNo();
-    }
-  }, [openFormFor, createLoadListData]);
-
   const loadCreateLoadBills = useCallback(
     async (
       showAlert = false,
@@ -40506,50 +40522,30 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       return;
     }
 
-    const setNextNo = async () => {
-      const nextNo =
-        await getNextCreateLoadNo(
-          createLoadFormData.loadSeries
-        );
-
-      setCreateLoadFormData((previous) => ({
-        ...previous,
-        loadNo: String(nextNo),
-      }));
-    };
-
     if (
+      String(createLoadFormData.loadSeries || "").trim() &&
+      (
       !createLoadFormData.loadNo ||
       createLoadFormData.loadNo ===
       "[object Promise]"
+      )
     ) {
-      setNextNo();
+      const series = createLoadFormData.loadSeries;
+      const requestId = ++createLoadNumberRequestRef.current;
+      void getNextCreateLoadNo(series).then((nextNo) => {
+        if (requestId !== createLoadNumberRequestRef.current) return;
+        setCreateLoadFormData((previous) =>
+          previous.loadSeries === series && (!previous.loadNo || previous.loadNo === "[object Promise]")
+            ? { ...previous, loadNo: String(nextNo) }
+            : previous
+        );
+      });
     }
   }, [
     openFormFor,
     createLoadListData,
     editingCreateLoadId,
   ]);
-  const loadNextCreateLoadNo = async (series = "") => {
-    try {
-      const { distributorId, firmId } = getFirmSession();
-
-      const res = await fetch(
-        `${API_URL}/create-load/next-no?distributorId=${distributorId}&firmId=${firmId}&loadSeries=${encodeURIComponent(series || "")}`
-      );
-
-      const result = await res.json();
-
-      if (res.ok && result.success) {
-        setCreateLoadFormData((prev) => ({
-          ...prev,
-          loadNo: result.nextLoadNo,
-        }));
-      }
-    } catch (error) {
-      console.error("Next create load no error:", error);
-    }
-  };
   const handleCreateLoadInputChange = async (e) => {
     const { name, value } = e.target;
 
@@ -40569,19 +40565,23 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     // LOAD SERIES
     // ==========================================================
     if (name === "loadSeries") {
+      const requestId = ++createLoadNumberRequestRef.current;
       setCreateLoadFormData((prev) => ({
         ...prev,
         loadSeries: cleanValue,
+        loadNo: "",
       }));
 
+      if (!String(cleanValue || "").trim()) return;
       try {
         const nextNo = await getNextCreateLoadNo(cleanValue);
 
-        setCreateLoadFormData((prev) => ({
-          ...prev,
-          loadSeries: cleanValue,
-          loadNo: String(nextNo || ""),
-        }));
+        if (requestId !== createLoadNumberRequestRef.current) return;
+        setCreateLoadFormData((prev) =>
+          prev.loadSeries === cleanValue && !prev.loadNo
+            ? { ...prev, loadNo: String(nextNo || "") }
+            : prev
+        );
       } catch (error) {
         console.error("Next Create Load number error:", error);
       }
@@ -40643,6 +40643,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     // ==========================================================
     // ALL OTHER FIELDS
     // ==========================================================
+    if (name === "loadNo") createLoadNumberRequestRef.current++;
     setCreateLoadFormData((prev) => ({
       ...prev,
       [name]: cleanValue,
@@ -61989,6 +61990,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       <div
         className={`dashboard-container ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${isFormReadOnly ? "is-form-read-only" : ""}`}
         onClickCapture={(event) => {
+          if (isFormReadOnly && event.target.closest(".settle-premium-page .settle-row-button")) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           if (event.target.closest("button.edit, .firm-ui-action-btn.edit, .user-ui-action-btn.edit")) {
             setIsFormReadOnly(false);
             return;
@@ -64597,7 +64603,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       type="button"
                       className="settle-top-button settle-top-save"
                       onClick={saveSettleLoad}
-                      disabled={isSavingSettleLoad}
+                      disabled={isFormReadOnly || isSavingSettleLoad}
                     >
                       <Save size={15} />
                       {isSavingSettleLoad ? "Saving..." : "Save"}
@@ -64637,6 +64643,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         placeholder="Enter series"
                         value={settleLoadFormData.loadSeries || ""}
                         onChange={handleSettleLoadInputChange}
+                        disabled={isFormReadOnly}
                       />
                     </div>
 
@@ -64651,6 +64658,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         placeholder="Enter load number"
                         value={settleLoadFormData.loadNo || ""}
                         onChange={handleSettleLoadInputChange}
+                        disabled={isFormReadOnly}
                         required
                       />
                     </div>
@@ -64663,6 +64671,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         name="loadDate"
                         value={settleLoadFormData.loadDate || ""}
                         onChange={handleSettleLoadInputChange}
+                        disabled={isFormReadOnly}
                       />
                     </div>
 
@@ -64676,6 +64685,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         name="settleLoadDate"
                         value={settleLoadFormData.settleLoadDate || ""}
                         onChange={handleSettleLoadInputChange}
+                        disabled={isFormReadOnly}
                         required
                       />
                     </div>
@@ -64689,6 +64699,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         placeholder="Enter settlement narration..."
                         value={settleLoadFormData.narration || ""}
                         onChange={handleSettleLoadInputChange}
+                        disabled={isFormReadOnly}
                       />
                     </div>
                   </div>
@@ -64870,7 +64881,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="settle-row-button settle-adjust-button"
-                                      disabled={settlementActionFinalized}
+                                      disabled={isFormReadOnly || settlementActionFinalized}
                                       onClick={() => {
                                         setSelectedSettleBillIndex(index);
                                         setSettleAdjustRowIndex(index);
@@ -64883,7 +64894,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="settle-row-button settle-pending-button"
-                                      disabled={settlementActionFinalized}
+                                      disabled={isFormReadOnly || settlementActionFinalized}
                                       onClick={() => {
                                         setSelectedSettleBillIndex(index);
 
@@ -64900,7 +64911,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="settle-row-button settle-receipt-button"
-                                      disabled={isSettleLoadItemFinalized(item, { allowBillEdit: true })}
+                                      disabled={isFormReadOnly || isSettleLoadItemFinalized(item, { allowBillEdit: true })}
                                       onClick={async () => {
                                         setSelectedSettleBillIndex(index);
 
@@ -64987,7 +64998,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="settle-row-button settle-cancel-button"
-                                      disabled={settlementActionFinalized}
+                                      disabled={isFormReadOnly || settlementActionFinalized}
                                       onClick={() => {
                                         setSelectedSettleBillIndex(index);
 
@@ -65114,7 +65125,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   <input
                                     type="checkbox"
                                     checked={isCancelled}
-                                    disabled={settlementActionFinalized}
+                                    disabled={isFormReadOnly || settlementActionFinalized}
                                     onChange={(event) => {
                                       setSelectedSettleBillIndex(index);
 
@@ -78721,15 +78732,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         </div>
 
                         <div
-                          className="billing-grid-footer"
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "auto minmax(0, 1fr) auto",
-                            alignItems: "stretch",
-                            gap: "8px",
-                            minHeight: "58px",
-                            padding: "5px",
-                          }}
+                          className="billing-grid-footer sales-product-detail-footer"
                         >
                           {/* LEFT ACTION BUTTONS */}
                           <div
@@ -78790,13 +78793,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </div>
 
                           {/* SELECTED PRODUCT DETAIL WINDOW */}
-                          <div
-                            style={{
-                              minWidth: 0,
-                              display: "flex",
-                              alignItems: "center",
-                            }}
-                          >
+                          <div className="sales-product-detail-line">
                             {selectedSalesDetailItem &&
                               String(
                                 selectedSalesDetailItem.product ||
@@ -78804,24 +78801,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 selectedSalesDetailItem.productId ||
                                 ""
                               ).trim() !== "" ? (
-                              <div
-                                style={{
-                                  width: "100%",
-                                  minHeight: "34px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "16px",
-                                  padding: "5px 10px",
-                                  border: "1px solid #9eb4cf",
-                                  borderRadius: "4px",
-                                  background: "#dce9f8",
-                                  color: "#113a73",
-                                  fontSize: "10px",
-                                  whiteSpace: "nowrap",
-                                  overflowX: "auto",
-                                  overflowY: "hidden",
-                                }}
-                              >
+                              <div className="sales-product-detail-values">
                                 <span>
                                   <strong>Batch:</strong>{" "}
                                   {getSalesDetailBatch(
@@ -78879,12 +78859,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   %
                                 </span>
 
-                                <span
-                                  style={{
-                                    marginLeft: "auto",
-                                    fontWeight: "800",
-                                  }}
-                                >
+                                <span>
+                                  <strong>Last Sales Rate:</strong>{" "}
+                                  {lastSalesRate.status === "loading" ? "Loading…" :
+                                    lastSalesRate.status === "error" ? "Unavailable" :
+                                      lastSalesRate.rate == null ? "—" : `₹${Number(lastSalesRate.rate).toFixed(2)}`}
+                                </span>
+
+                                <span>
                                   <strong>Net Amount:</strong> ₹
                                   {getSalesDetailNetAmount(
                                     selectedSalesDetailItem
@@ -78892,21 +78874,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 </span>
                               </div>
                             ) : (
-                              <div
-                                style={{
-                                  width: "100%",
-                                  minHeight: "34px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  padding: "5px 10px",
-                                  border: "1px dashed #aebdd0",
-                                  borderRadius: "4px",
-                                  background: "#f8fafc",
-                                  color: "#718096",
-                                  fontSize: "10px",
-                                }}
-                              >
+                              <div className="sales-product-detail-placeholder">
                                 Click a product row to view its details
                               </div>
                             )}
@@ -78914,28 +78882,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                           {/* RIGHT TOTALS */}
                           <div
-                            className="billing-grid-totals"
-                            style={{
-                              display: "flex",
-                              alignItems: "stretch",
-                              whiteSpace: "nowrap",
-                            }}
+                            className="billing-grid-totals sales-product-detail-totals"
                           >
                             <span>
-                              Total Items:
-                              <strong>
+                              <strong>Total Items:</strong>{" "}
+                              <span>
                                 {
                                   invoiceItems.filter(
                                     (row) =>
                                       String(row.product || "").trim() !== ""
                                   ).length
                                 }
-                              </strong>
+                              </span>
                             </span>
 
                             <span>
-                              Total Qty:
-                              <strong>
+                              <strong>Total Qty:</strong>{" "}
+                              <span>
                                 {invoiceItems
                                   .reduce(
                                     (total, row) =>
@@ -78943,7 +78906,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     0
                                   )
                                   .toFixed(2)}
-                              </strong>
+                              </span>
                             </span>
                           </div>
                         </div>

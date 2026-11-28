@@ -15,6 +15,7 @@ assert.ok(lockStart >= 0 && lockEnd > lockStart && updateStart >= 0 && updateEnd
 test("editing a bill locks other actions but permits a receipt for its updated balance", async () => {
   const original = { billAmount: 100, originalBillAmount: 100, receiptAmount: 0, pending: "N", adjust: "N", cancel: "N", status: "Pending" };
   const context = {
+    isFormReadOnly: false,
     settleLoadItems: [original], settleAdjustRowIndex: 0, updatedBillAmount: 90, updatedBillType: "Credit",
     receiptFormData: { ourBankAccount: "cash", receiptAmount: 90 },
     getBillPendingAmount: async () => 90,
@@ -37,5 +38,5 @@ test("editing a bill locks other actions but permits a receipt for its updated b
   for (const action of [{ pending: "Y" }, { cancel: "Y" }, { adjust: "Y" }, { receiptAmount: 10, status: "Partial" }]) {
     assert.equal(context.finalized({ ...original, ...action }, { allowBillEdit: true }), true);
   }
-  assert.match(source, /className="settle-row-button settle-receipt-button"\s+disabled=\{isSettleLoadItemFinalized\(item, \{ allowBillEdit: true \}\)\}/);
+  assert.match(source, /className="settle-row-button settle-receipt-button"\s+disabled=\{isFormReadOnly \|\| isSettleLoadItemFinalized\(item, \{ allowBillEdit: true \}\)\}/);
 });

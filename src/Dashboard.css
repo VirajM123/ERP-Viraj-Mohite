@@ -13677,6 +13677,47 @@ select.billing-table-control {
   font-variant-numeric: tabular-nums;
 }
 
+/* Sales invoice product details: one plain, horizontally scrollable line. */
+.sales-invoice-entry-page .sales-product-detail-footer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  min-height: 40px;
+  padding: 5px;
+  overflow-x: auto;
+  white-space: nowrap;
+  background: #fff;
+}
+.sales-invoice-entry-page .sales-product-detail-line,
+.sales-invoice-entry-page .sales-product-detail-values,
+.sales-invoice-entry-page .sales-product-detail-totals {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 14px;
+  min-height: 0;
+  color: #334155;
+  font-size: 10px;
+}
+.sales-invoice-entry-page .sales-product-detail-line { flex: 1 0 auto; }
+.sales-invoice-entry-page .sales-product-detail-totals { width: auto; border: 0; min-height: 0 !important; }
+.sales-invoice-entry-page .sales-product-detail-placeholder { color: #718096; }
+.sales-invoice-entry-page .sales-product-detail-footer strong { color: #113a73; font-size: 10px; }
+.sales-invoice-entry-page .sales-product-detail-totals > span,
+.sales-invoice-entry-page .sales-product-detail-totals > span > span {
+  display: inline;
+  min-width: 0 !important;
+  height: auto;
+  padding: 0 !important;
+  border: 0;
+  background: transparent;
+  color: #334155;
+  font-size: 10px !important;
+  font-weight: 400;
+}
+
 /* =========================================================
    SUMMARY AND FINAL AMOUNT
    ========================================================= */
