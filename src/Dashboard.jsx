@@ -21,6 +21,10 @@ import { businessDateIST } from "./utils/businessDate";
 import { entryDaysDateRange } from "./utils/entryDaysDateRange";
 import { escapeHtml } from "./utils/escapeHtml";
 import { resolveInvoiceItemHsn } from "./utils/invoiceHsn";
+import {
+  createSettleAdjustHeader,
+  settleAdjustHeaderValue,
+} from "./utils/settleAdjustHeader";
 import { findPurchaseSupplier, purchaseSupplierValue } from "./utils/purchaseSupplier";
 import {
   loadPermissions,
@@ -8395,6 +8399,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [isSettleAdjustMode, setIsSettleAdjustMode] = useState(false);
   const settleAdjustHeaderReadOnly = isSettleAdjustMode === true;
   const [settleAdjustRowIndex, setSettleAdjustRowIndex] = useState(null);
+  const [settleAdjustHeader, setSettleAdjustHeader] = useState(null);
   const [selectedSettleBillIndex, setSelectedSettleBillIndex] = useState(null);
   const [editFirmId, setEditFirmId] = useState(null);
   const [selectedFirm, setSelectedFirm] = useState(null);
@@ -8410,6 +8415,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setShowSettleLoadList(false);
     setIsSettleAdjustMode(false);
     setSettleAdjustRowIndex(null);
+    setSettleAdjustHeader(null);
 
     setEditingInvoiceId(null);
     setEditingLoadedSalesBill(false);
@@ -11971,24 +11977,32 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       let partyCode = bill.PartyCode || "";
       let partyName = bill.PartyName || "";
 
-      if (!areaCode && areaName) {
-        const foundArea = partyMappings.find(
-          (m) => String(m.areaName).trim() === String(areaName).trim()
-        );
-        areaCode = foundArea?.areaCode || "";
-      }
+      const savedAreaMapping = areaCode || areaName
+        ? partyMappings.find((mapping) =>
+            invoiceMappingKey(mapping.areaCode) === invoiceMappingKey(areaCode) ||
+            invoiceMappingKey(mapping.areaName) === invoiceMappingKey(areaName)
+          )
+        : null;
+      areaCode = areaCode || savedAreaMapping?.areaCode || "";
+      areaName = areaName || savedAreaMapping?.areaName || "";
 
-      if (!partyCode && partyName) {
-        const foundParty = partyMappings.find(
-          (m) => String(m.accountName).trim() === String(partyName).trim()
-        );
-        partyCode = foundParty?.accountCode || "";
-      }
+      const savedPartyMapping = partyCode || partyName
+        ? partyMappings.find((mapping) =>
+            (invoiceMappingKey(mapping.accountCode) === invoiceMappingKey(partyCode) ||
+              invoiceMappingKey(mapping.accountName) === invoiceMappingKey(partyName)) &&
+            (!areaCode || invoiceMappingKey(mapping.areaCode) === invoiceMappingKey(areaCode))
+          )
+        : null;
+      partyCode = partyCode || savedPartyMapping?.accountCode || "";
+      partyName = partyName || savedPartyMapping?.accountName || "";
 
       if (
         areaCode &&
         partyCode &&
-        !partyMappings.some((m) => String(m.accountCode) === String(partyCode))
+        !partyMappings.some((mapping) =>
+          invoiceMappingKey(mapping.areaCode) === invoiceMappingKey(areaCode) &&
+          invoiceMappingKey(mapping.accountCode) === invoiceMappingKey(partyCode)
+        )
       ) {
         partyMappings.push({
           areaCode,
@@ -11998,21 +12012,40 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         });
       }
 
+      const savedSalesman = bill.SalesmanCode || bill.SalesmanName
+        ? salesmen.find(
+            (salesman) =>
+              invoiceMappingKey(salesman.salesmanCode || salesman.code) ===
+                invoiceMappingKey(bill.SalesmanCode) ||
+              invoiceMappingKey(salesman.salesmanName || salesman.name) ===
+                invoiceMappingKey(bill.SalesmanName)
+          )
+        : null;
       const salesmanName =
         bill.SalesmanName ||
-        salesmen.find(
-          (s) =>
-            String(s.salesmanCode || s.code) === String(bill.SalesmanCode)
-        )?.salesmanName ||
-        salesmen.find(
-          (s) =>
-            String(s.salesmanCode || s.code) === String(bill.SalesmanCode)
-        )?.name ||
+        savedSalesman?.salesmanName ||
+        savedSalesman?.name ||
+        "";
+      const salesmanCode =
+        bill.SalesmanCode ||
+        savedSalesman?.salesmanCode ||
+        savedSalesman?.code ||
         "";
 
       setInvoiceAreaPartyMappings(partyMappings);
       setInvoiceSalesmanAreaMappings(salesmanMappings);
       setIsInvoiceSalesmanFirstSelection(false);
+      setSettleAdjustHeader(
+        createSettleAdjustHeader({
+          bill,
+          areaCode,
+          areaName,
+          partyCode,
+          partyName,
+          salesmanCode,
+          salesmanName,
+        })
+      );
 
       setInvoiceFormData({
         billDate: bill.BillDate || new Date().toISOString().split("T")[0],
@@ -25252,10 +25285,19 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           s.salesmanCode === invoiceFormData.salesman
       );
 
-      const areaCode = String(invoiceFormData.area || "").trim()
+      const resolvedAreaCode = String(invoiceFormData.area || "").trim()
         ? selectedArea?.code || selectedArea?.areaCode || "" : "";
-      const salesmanCode = String(invoiceFormData.salesman || "").trim()
+      const resolvedSalesmanCode = String(invoiceFormData.salesman || "").trim()
         ? selectedSalesman?.code || selectedSalesman?.salesmanCode || "" : "";
+      const savedSettleHeaderValue = (field, fallback) =>
+        isSettleAdjustMode
+          ? settleAdjustHeaderValue(settleAdjustHeader, field, fallback)
+          : fallback;
+      const areaCode = savedSettleHeaderValue("areaCode", resolvedAreaCode);
+      const salesmanCode = savedSettleHeaderValue(
+        "salesmanCode",
+        resolvedSalesmanCode
+      );
       const headerError = salesBillingHeaderError({
         areaCode,
         salesmanCode,
@@ -25687,40 +25729,82 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         firmId,
         firmName,
 
-        BillDate: invoiceFormData.billDate,
-        Godown: invoiceFormData.godown,
-        GDCode: selectedGodown?.code || selectedGodown?.godownCode || invoiceFormData.godown,
+        BillDate: savedSettleHeaderValue(
+          "billDate",
+          invoiceFormData.billDate
+        ),
+        Godown: savedSettleHeaderValue(
+          "godown",
+          invoiceFormData.godown
+        ),
+        GDCode: savedSettleHeaderValue(
+          "godownCode",
+          selectedGodown?.code ||
+            selectedGodown?.godownCode ||
+            invoiceFormData.godown
+        ),
 
-        CompanyCode: isMixSelected
-          ? "MIX"
-          : selectedCompany?.code || selectedCompany?.companyCode || invoiceFormData.company || "",
+        CompanyCode: savedSettleHeaderValue(
+          "companyCode",
+          isMixSelected
+            ? "MIX"
+            : selectedCompany?.code || selectedCompany?.companyCode || invoiceFormData.company || ""
+        ),
 
-        CompanyName: isMixSelected
-          ? "MIX"
-          : selectedCompany?.name || selectedCompany?.companyName || invoiceFormData.company || "",
+        CompanyName: savedSettleHeaderValue(
+          "companyName",
+          isMixSelected
+            ? "MIX"
+            : selectedCompany?.name || selectedCompany?.companyName || invoiceFormData.company || ""
+        ),
 
         AreaCode: areaCode,
-        AreaName: selectedArea?.name || selectedArea?.areaName || invoiceFormData.area,
+        AreaName: savedSettleHeaderValue(
+          "areaName",
+          selectedArea?.name || selectedArea?.areaName || invoiceFormData.area
+        ),
 
-        PartyCode: selectedParty?.accountCode || "",
-        PartyName: selectedParty?.accountName || invoiceFormData.party,
+        PartyCode: savedSettleHeaderValue(
+          "partyCode",
+          selectedParty?.accountCode || ""
+        ),
+        PartyName: savedSettleHeaderValue(
+          "partyName",
+          selectedParty?.accountName || invoiceFormData.party
+        ),
 
-        BillSeries: invoiceFormData.BillSeries || "",
-        BillNo: Number(invoiceFormData.billNo || 0),
-        BillType: invoiceFormData.billType || "Credit",
+        BillSeries: savedSettleHeaderValue(
+          "billSeries",
+          invoiceFormData.BillSeries || ""
+        ),
+        BillNo: Number(
+          savedSettleHeaderValue("billNo", invoiceFormData.billNo || 0)
+        ),
+        BillType: savedSettleHeaderValue(
+          "billType",
+          invoiceFormData.billType || "Credit"
+        ),
         SalesEntryType:
           activeSubMenu === "Counter Sales"
             ? "COUNTER_SALES"
             : "BILLING",
-        DueDate: invoiceFormData.dueDate,
+        DueDate: savedSettleHeaderValue(
+          "dueDate",
+          invoiceFormData.dueDate
+        ),
 
         SalesmanCode: salesmanCode,
-        SalesmanName:
+        SalesmanName: savedSettleHeaderValue(
+          "salesmanName",
           selectedSalesman?.name ||
-          selectedSalesman?.salesmanName ||
-          invoiceFormData.salesman,
+            selectedSalesman?.salesmanName ||
+            invoiceFormData.salesman
+        ),
 
-        Narration: invoiceFormData.narration || "",
+        Narration: savedSettleHeaderValue(
+          "narration",
+          invoiceFormData.narration || ""
+        ),
 
         GrossAmount: Number(
           invoiceSummary.gross || 0
